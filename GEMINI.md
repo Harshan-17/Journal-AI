@@ -36,3 +36,16 @@ When integrating or interacting with Google Maps Platform APIs, SDKs, or service
 ## 3. Cloud Firestore Security & Multi-Tenant Isolation
 - **Owner-Bound Path Isolation**: All user-authored reflections, location pins, and interaction records must reside under `/users/{userId}/...` where `request.auth.uid == userId`.
 - **Zero Insecure Defaults**: Reject `allow read, write: if true;` in security rules.
+
+---
+
+## 4. Frontend Design Taste Directives (Leonxlnx/taste-skill)
+- **Design Read**: Prioritize contextual design reads before generating frontends. Infer page purpose, target audience, and visual aesthetic.
+- **The Three Dials**:
+  - `DESIGN_VARIANCE: 8` (1 = Perfect Symmetry, 10 = High Dynamic Variance)
+  - `MOTION_INTENSITY: 6` (1 = Static, 10 = Cinematic Physics)
+  - `VISUAL_DENSITY: 4` (1 = Airy / Gallery, 10 = Dense / Analytical)
+- **Anti-AI-Slop Standard**: Eliminate generic AI defaults (purple-to-blue glow, identical 3-column card grids, centered hero over dark mesh, low-contrast text).
+- **Typography Hierarchy**: Pair distinctive display fonts with clear, accessible body typography. Step ratios >= 1.25, line heights 1.5–1.7.
+- **Motion & Interactions**: Isolate motion in client components using `motion/react`, honoring `prefers-reduced-motion`.
+

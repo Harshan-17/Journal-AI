@@ -24,6 +24,8 @@ import { SecurityBadgeModal } from './components/SecurityBadgeModal';
 import { SummaryModal } from './components/SummaryModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
 import { EntriesMapViewModal } from './components/EntriesMapViewModal';
+import { AmbientBackground } from './components/AmbientBackground';
+import { HalftoneRevealModal } from './components/HalftoneRevealModal';
 import { JournalEntry, JournalMessage, ReflectionMode, UserProfile } from './types';
 import { sanitizePayload, formatTimestamp, isValidCoordinate } from './utils/sanitize';
 
@@ -43,6 +45,7 @@ export default function App() {
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [isFirebaseConfigModalOpen, setIsFirebaseConfigModalOpen] = useState(false);
   const [isMapViewOpen, setIsMapViewOpen] = useState(false);
+  const [isHalftoneModalOpen, setIsHalftoneModalOpen] = useState(false);
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
 
   // 1. Listen for Authentication state changes (Firebase Auth)
@@ -478,13 +481,15 @@ export default function App() {
   // Unauthenticated Landing Page
   if (!user) {
     return (
-      <div className="min-h-screen bg-stone-950 flex flex-col font-sans">
+      <div className="min-h-screen bg-stone-950 flex flex-col font-sans relative overflow-hidden">
+        <AmbientBackground />
         <Navbar
           user={null}
           onSignOut={handleSignOut}
           onNewEntry={() => {}}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+          onOpenClarityLoupe={() => setIsHalftoneModalOpen(true)}
           saveStatus="saved"
         />
         <LandingPage
@@ -496,6 +501,7 @@ export default function App() {
           }}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+          onOpenHalftoneModal={() => setIsHalftoneModalOpen(true)}
         />
         <SecurityBadgeModal
           isOpen={isSecurityModalOpen}
@@ -505,6 +511,10 @@ export default function App() {
           isOpen={isFirebaseConfigModalOpen}
           onClose={() => setIsFirebaseConfigModalOpen(false)}
         />
+        <HalftoneRevealModal
+          isOpen={isHalftoneModalOpen}
+          onClose={() => setIsHalftoneModalOpen(false)}
+        />
       </div>
     );
   }
@@ -512,17 +522,19 @@ export default function App() {
   // Loading indicator while initial user entries are fetching from Cloud Firestore
   if (isEntriesLoading && entries.length === 0) {
     return (
-      <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100">
+      <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100 relative overflow-hidden">
+        <AmbientBackground />
         <Navbar
           user={user}
           onSignOut={handleSignOut}
           onNewEntry={() => {}}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+          onOpenClarityLoupe={() => setIsHalftoneModalOpen(true)}
           saveStatus="saving"
         />
-        <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-          <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+        <div className="flex-1 flex flex-col items-center justify-center space-y-4 relative z-10">
+          <div className="w-8 h-8 border-3 border-cyan-400 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-stone-400">Retrieving your private reflections from Firestore...</p>
         </div>
       </div>
@@ -537,7 +549,8 @@ export default function App() {
       : createNewEmptyEntry(user.uid));
 
   return (
-    <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100">
+    <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100 relative overflow-hidden">
+      <AmbientBackground />
       {/* Top Navigation */}
       <Navbar
         user={user}
@@ -545,7 +558,9 @@ export default function App() {
         onNewEntry={handleNewEntry}
         onOpenSecurity={() => setIsSecurityModalOpen(true)}
         onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+        onOpenClarityLoupe={() => setIsHalftoneModalOpen(true)}
         onToggleSidebar={() => setIsSidebarOpenMobile((prev) => !prev)}
+        onOpenMapView={() => setIsMapViewOpen(true)}
         saveStatus={saveStatus}
       />
 
@@ -595,6 +610,12 @@ export default function App() {
       <FirebaseConfigModal
         isOpen={isFirebaseConfigModalOpen}
         onClose={() => setIsFirebaseConfigModalOpen(false)}
+      />
+
+      {/* Mindful Clarity Loupe / Halftone Reveal Modal */}
+      <HalftoneRevealModal
+        isOpen={isHalftoneModalOpen}
+        onClose={() => setIsHalftoneModalOpen(false)}
       />
 
       {/* Global Atlas / Maps View Modal */}

@@ -1,5 +1,14 @@
 export type ReflectionMode = 'reflect' | 'brainstorm' | 'summarize' | 'actionable';
 
+export type AppTheme = 'aurora' | 'cyberpunk' | 'sunset' | 'emerald' | 'violet';
+
+export interface MoodTag {
+  id: string;
+  emoji: string;
+  label: string;
+  color: string;
+}
+
 export interface JournalLocation {
   placeId?: string;
   name?: string;

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { JournalEntry } from '../types';
 import { isValidCoordinate, formatTimestamp } from '../utils/sanitize';
+import { useAppTheme } from '../context/ThemeContext';
 
 interface EntriesMapViewModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
     return localStorage.getItem('user_google_maps_api_key') || '';
   });
   const effectiveApiKey = envKey || serverKey || customKey;
+  const { themeConfig, celebrate } = useAppTheme();
 
   // Auto-fetch API key from backend if not defined in build env or storage
   useEffect(() => {
@@ -77,29 +79,29 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-stone-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-stone-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-stone-900/95 border border-stone-800 rounded-3xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden backdrop-blur-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 bg-stone-900/90">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800/80 bg-stone-950/80">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${themeConfig.primaryGradient} flex items-center justify-center text-stone-950 font-bold shadow-md`}>
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-stone-100 flex items-center space-x-2">
+              <h2 className="text-base font-serif font-semibold text-stone-100 flex items-center space-x-2">
                 <span>Reflections Atlas</span>
-                <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  {locationEntries.length} {locationEntries.length === 1 ? 'Location' : 'Locations'}
+                <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full ${themeConfig.badgeBg} ${themeConfig.accentText} border`}>
+                  {locationEntries.length} {locationEntries.length === 1 ? 'place' : 'places'}
                 </span>
               </h2>
               <p className="text-xs text-stone-400">
-                Explore all your memories and thoughts pinned across the world
+                Memories and thoughts pinned across the world
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-xl transition-colors"
+            className="p-2 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -130,10 +132,10 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
                     onClick={() => setActiveEntry(entry)}
                   >
                     <Pin
-                      background="#f59e0b"
-                      borderColor="#78350f"
-                      glyphColor="#451a03"
-                      scale={1.1}
+                      background="#06b6d4"
+                      borderColor="#083344"
+                      glyphColor="#164e63"
+                      scale={1.2}
                     />
                   </AdvancedMarker>
                 ))}
@@ -146,9 +148,9 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
                     }}
                     onCloseClick={() => setActiveEntry(null)}
                   >
-                    <div className="p-2 min-w-[220px] max-w-[280px] text-stone-900">
-                      <div className="flex items-center space-x-1.5 text-xs text-amber-700 font-semibold mb-1">
-                        <MapPin className="w-3.5 h-3.5" />
+                    <div className="p-2.5 min-w-[220px] max-w-[280px] text-stone-900 bg-white rounded-xl">
+                      <div className="flex items-center space-x-1.5 text-xs text-cyan-700 font-bold mb-1">
+                        <MapPin className="w-3.5 h-3.5 text-cyan-600" />
                         <span className="truncate">
                           {activeEntry.location.name || 'Pinned Location'}
                         </span>
@@ -162,15 +164,16 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
                           'No details recorded.'}
                       </p>
                       <div className="flex items-center justify-between pt-2 border-t border-stone-200">
-                        <span className="text-[10px] text-stone-500">
+                        <span className="text-[10px] text-stone-500 font-medium">
                           {formatTimestamp(activeEntry.createdAt)}
                         </span>
                         <button
                           onClick={() => {
+                            celebrate(20);
                             onSelectEntry(activeEntry);
                             onClose();
                           }}
-                          className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1"
+                          className={`px-3 py-1 ${themeConfig.accentBg} text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center space-x-1 cursor-pointer`}
                         >
                           <BookOpen className="w-3 h-3" />
                           <span>Open</span>
@@ -183,15 +186,15 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
             </APIProvider>
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <Compass className="w-6 h-6" />
+              <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${themeConfig.primaryGradient} text-stone-950 flex items-center justify-center shadow-lg font-bold`}>
+                <Compass className="w-6 h-6 animate-pulse" />
               </div>
               <div className="max-w-md space-y-2">
-                <h3 className="text-base font-semibold text-stone-200">
-                  Google Maps Platform API Key Required
+                <h3 className="text-base font-serif font-semibold text-stone-200">
+                  Google Maps API Configuration
                 </h3>
                 <p className="text-xs text-stone-400 leading-relaxed">
-                  To view your pinned reflections on the global atlas, please configure your Google Maps API key or use the free Maps Demo Key.
+                  To view your pinned reflections on the global atlas, configure your Google Maps API key or use the free Maps Demo Key.
                 </p>
               </div>
             </div>
@@ -199,8 +202,8 @@ export const EntriesMapViewModal: React.FC<EntriesMapViewModalProps> = ({
 
           {/* Location Entries Drawer / Overlay */}
           {locationEntries.length === 0 && (
-            <div className="absolute top-4 left-4 right-4 sm:right-auto sm:max-w-sm bg-stone-900/90 backdrop-blur-md border border-stone-800 p-4 rounded-xl shadow-xl space-y-2 pointer-events-auto">
-              <div className="flex items-center space-x-2 text-xs font-medium text-amber-400">
+            <div className="absolute top-4 left-4 right-4 sm:right-auto sm:max-w-sm bg-stone-900/90 backdrop-blur-md border border-stone-800 p-4 rounded-2xl shadow-xl space-y-2 pointer-events-auto">
+              <div className="flex items-center space-x-2 text-xs font-semibold text-cyan-400">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>No pinned locations yet</span>
               </div>

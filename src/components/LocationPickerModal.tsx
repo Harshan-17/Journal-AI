@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { JournalLocation } from '../types';
 import { isValidCoordinate, sanitizePayload } from '../utils/sanitize';
+import { useAppTheme } from '../context/ThemeContext';
 
 interface LocationPickerModalProps {
   isOpen: boolean;
@@ -60,6 +61,7 @@ const LocationPickerInner: React.FC<{
   const map = useMap();
   const geocodingLib = useMapsLibrary('geocoding');
   const placesLib = useMapsLibrary('places');
+  const { themeConfig, celebrate } = useAppTheme();
 
   const [selectedLocation, setSelectedLocation] = useState<JournalLocation | null>(
     currentLocation || null
@@ -254,7 +256,50 @@ const LocationPickerInner: React.FC<{
         }
       }
 
-      // 3. Client-Side Google Geocoder (Runs directly in browser)
+      // 3. Client-Side Google Places TextSearch (Best for POIs, cities, landmarks)
+      if (placesServiceRef.current) {
+        try {
+          const placesResult = await new Promise<google.maps.places.PlaceResult[] | null>((resolve) => {
+            placesServiceRef.current?.textSearch({ query }, (results, status) => {
+              if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+                resolve(results);
+              } else {
+                resolve(null);
+              }
+            });
+          });
+
+          if (placesResult && placesResult.length > 0) {
+            const first = placesResult[0];
+            if (first.geometry?.location) {
+              const lat = first.geometry.location.lat();
+              const lng = first.geometry.location.lng();
+              if (isValidCoordinate(lat, lng)) {
+                const loc: JournalLocation = {
+                  latitude: lat,
+                  longitude: lng,
+                  formattedAddress: first.formatted_address || query,
+                  placeId: first.place_id,
+                  name: first.name || query,
+                };
+                setSelectedLocation(loc);
+                setMapCenter({ lat, lng });
+                setMapZoom(14);
+                if (map) {
+                  map.panTo({ lat, lng });
+                  map.setZoom(14);
+                }
+                setIsSearching(false);
+                return;
+              }
+            }
+          }
+        } catch (placesErr) {
+          console.warn('Places textSearch issue, proceeding to geocoder:', placesErr);
+        }
+      }
+
+      // 4. Client-Side Google Geocoder (Runs directly in browser)
       if (geocodingLib) {
         try {
           const geocoder = new geocodingLib.Geocoder();
@@ -288,7 +333,7 @@ const LocationPickerInner: React.FC<{
         }
       }
 
-      // 4. Backend Proxy Geocoding (with OSM fallback built in)
+      // 5. Backend Proxy Geocoding & Global Place Resolution
       const res = await fetch(`/api/maps/geocode?address=${encodeURIComponent(query)}`);
       const data = await res.json();
 
@@ -321,7 +366,7 @@ const LocationPickerInner: React.FC<{
         }
       }
 
-      setErrorMsg(`No locations found for "${query}". Try searching a city, country, or specific landmark.`);
+      setErrorMsg(`No locations found for "${query}". Try typing a city, country, or landmark name.`);
     } catch (err: any) {
       console.error('Location search error:', err);
       setErrorMsg('Search encountered an issue. You can click anywhere on the map to pin a place directly.');
@@ -414,6 +459,7 @@ const LocationPickerInner: React.FC<{
     if (selectedLocation) {
       if (isValidCoordinate(selectedLocation.latitude, selectedLocation.longitude)) {
         onSaveLocation(sanitizePayload(selectedLocation));
+        celebrate(30);
       } else {
         setErrorMsg('Invalid coordinates. Please re-pin on the map.');
         return;
@@ -441,7 +487,7 @@ const LocationPickerInner: React.FC<{
                 onFocus={() => {
                   if (predictions.length > 0) setShowPredictions(true);
                 }}
-                className="w-full pl-10 pr-4 py-2.5 bg-stone-950/90 border border-stone-700/80 rounded-xl text-xs sm:text-sm text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 shadow-inner"
+                className="w-full pl-10 pr-4 py-2.5 bg-stone-950/90 border border-stone-700/80 rounded-xl text-xs sm:text-sm text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 shadow-inner"
               />
               {searchQuery && (
                 <button
@@ -462,10 +508,10 @@ const LocationPickerInner: React.FC<{
               id="btn-search-location"
               type="submit"
               disabled={isSearching || !searchQuery.trim()}
-              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center space-x-1.5 disabled:opacity-50"
+              className={`px-4 py-2.5 ${themeConfig.accentBg} text-xs font-bold rounded-xl transition-all shadow-md flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer active:scale-95`}
             >
               {isSearching ? (
-                <div className="w-3.5 h-3.5 border-2 border-stone-900 border-t-transparent rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
               ) : (
                 <Search className="w-3.5 h-3.5" />
               )}
@@ -485,9 +531,9 @@ const LocationPickerInner: React.FC<{
                       setSearchQuery(p.description);
                       executeSearch(p.description, p.placeId);
                     }}
-                    className="w-full text-left px-3.5 py-2.5 hover:bg-stone-800 flex items-start space-x-2.5 transition-colors border-b border-stone-800/60 last:border-0"
+                    className="w-full text-left px-3.5 py-2.5 hover:bg-stone-800 flex items-start space-x-2.5 transition-colors border-b border-stone-800/60 last:border-0 cursor-pointer"
                   >
-                    <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <MapPin className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-stone-100 truncate">{p.mainText}</p>
                       {p.secondaryText && (
@@ -506,7 +552,7 @@ const LocationPickerInner: React.FC<{
           type="button"
           onClick={handleUseCurrentLocation}
           disabled={isLocating}
-          className="px-4 py-2.5 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shrink-0"
+          className="px-4 py-2.5 bg-stone-800 hover:bg-stone-750 text-cyan-300 border border-cyan-500/30 text-xs font-semibold rounded-xl transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 shrink-0 cursor-pointer active:scale-95"
         >
           <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
           <span>{isLocating ? 'Locating...' : 'Current Location'}</span>
@@ -522,7 +568,7 @@ const LocationPickerInner: React.FC<{
       )}
 
       {/* Interactive Google Map Area */}
-      <div className="relative w-full h-80 sm:h-96 rounded-xl border border-stone-700/80 overflow-hidden bg-stone-950 shadow-inner">
+      <div className="relative w-full h-80 sm:h-96 rounded-2xl border border-stone-700/80 overflow-hidden bg-stone-950 shadow-inner">
         <Map
           center={mapCenter}
           zoom={mapZoom}
@@ -548,9 +594,9 @@ const LocationPickerInner: React.FC<{
                 title={selectedLocation.name || 'Pinned Location'}
               >
                 <Pin
-                  background="#f59e0b"
-                  borderColor="#78350f"
-                  glyphColor="#451a03"
+                  background="#06b6d4"
+                  borderColor="#083344"
+                  glyphColor="#164e63"
                   scale={1.2}
                 />
               </AdvancedMarker>
@@ -558,17 +604,17 @@ const LocationPickerInner: React.FC<{
         </Map>
 
         {/* Overlay Helper Badge */}
-        <div className="absolute bottom-3 left-3 bg-stone-900/90 backdrop-blur-sm border border-stone-700/80 px-3 py-1.5 rounded-lg text-[11px] text-stone-300 flex items-center space-x-2 pointer-events-none shadow-lg">
-          <Layers className="w-3.5 h-3.5 text-amber-400" />
+        <div className="absolute bottom-3 left-3 bg-stone-900/90 backdrop-blur-md border border-stone-700/80 px-3 py-1.5 rounded-xl text-[11px] text-stone-300 flex items-center space-x-2 pointer-events-none shadow-lg">
+          <Layers className="w-3.5 h-3.5 text-cyan-400" />
           <span>Click anywhere on the map to drop or move the pin</span>
         </div>
       </div>
 
       {/* Selected Pin Details Display */}
       {selectedLocation && (
-        <div className="bg-stone-950/90 border border-stone-800 p-4 rounded-xl flex items-start justify-between gap-4 animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="bg-stone-950/90 border border-stone-800 p-4 rounded-2xl flex items-start justify-between gap-4 animate-in fade-in slide-in-from-bottom-2 duration-150">
           <div className="flex items-start space-x-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+            <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${themeConfig.primaryGradient} text-stone-950 flex items-center justify-center shrink-0 mt-0.5 font-bold shadow-md`}>
               <MapPinned className="w-4 h-4" />
             </div>
             <div className="min-w-0 space-y-0.5">
@@ -576,14 +622,14 @@ const LocationPickerInner: React.FC<{
                 <h4 className="text-xs sm:text-sm font-semibold text-stone-100 truncate">
                   {selectedLocation.name || 'Pinned Location'}
                 </h4>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 font-bold">
                   Attached
                 </span>
               </div>
               <p className="text-xs text-stone-400 truncate">
                 {selectedLocation.formattedAddress || 'No address details'}
               </p>
-              <p className="text-[11px] font-mono text-stone-400">
+              <p className="text-[11px] font-mono text-stone-500">
                 {selectedLocation.latitude.toFixed(5)}, {selectedLocation.longitude.toFixed(5)}
               </p>
             </div>
@@ -592,7 +638,7 @@ const LocationPickerInner: React.FC<{
           <button
             type="button"
             onClick={() => setSelectedLocation(null)}
-            className="text-stone-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-stone-800 transition-colors"
+            className="text-stone-400 hover:text-rose-400 p-1.5 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer"
             title="Clear pin"
           >
             <Trash2 className="w-4 h-4" />
@@ -611,7 +657,7 @@ const LocationPickerInner: React.FC<{
                 onSaveLocation(null);
                 onClose();
               }}
-              className="text-xs text-rose-400 hover:text-rose-300 flex items-center space-x-1.5 px-3 py-2 rounded-xl hover:bg-rose-950/30 transition-colors"
+              className="text-xs text-rose-400 hover:text-rose-300 flex items-center space-x-1.5 px-3 py-2 rounded-xl hover:bg-rose-950/30 transition-all active:scale-95 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Remove Pin</span>
@@ -623,7 +669,7 @@ const LocationPickerInner: React.FC<{
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-xl transition-colors"
+            className="px-4 py-2 text-xs font-medium text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-xl transition-all active:scale-95 cursor-pointer"
           >
             Cancel
           </button>
@@ -631,7 +677,7 @@ const LocationPickerInner: React.FC<{
             id="btn-confirm-attach-location"
             type="button"
             onClick={handleConfirm}
-            className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all flex items-center space-x-1.5"
+            className={`px-5 py-2.5 ${themeConfig.accentBg} font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center space-x-1.5 cursor-pointer`}
           >
             <Check className="w-3.5 h-3.5" />
             <span>Attach Location</span>
@@ -654,6 +700,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     return localStorage.getItem('user_google_maps_api_key') || '';
   });
   const effectiveApiKey = envKey || serverKey || customKey;
+  const { themeConfig } = useAppTheme();
 
   // Auto-fetch API key from backend if not defined in client env or storage
   useEffect(() => {
@@ -679,20 +726,17 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-stone-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-stone-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-stone-900/95 border border-stone-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden backdrop-blur-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 bg-stone-900/90">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800/80 bg-stone-950/80">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${themeConfig.primaryGradient} flex items-center justify-center text-stone-950 font-bold shadow-md`}>
               <MapPin className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-stone-100 flex items-center space-x-2">
-                <span>Location Pinning</span>
-                <span className="text-[10px] font-medium tracking-wide uppercase px-2 py-0.5 rounded-full bg-stone-800 text-stone-400 border border-stone-700">
-                  Google Maps Platform
-                </span>
+              <h2 className="text-base font-serif font-semibold text-stone-100 flex items-center space-x-2">
+                <span>Attach Location</span>
               </h2>
               <p className="text-xs text-stone-400">
                 Pin a physical or inspirational place to your reflection entry
@@ -701,7 +745,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-xl transition-colors"
+            className="p-2 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -723,7 +767,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
           </APIProvider>
         ) : (
           <div className="p-8 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${themeConfig.primaryGradient} text-stone-950 flex items-center justify-center shadow-lg font-bold`}>
               <Compass className="w-6 h-6 animate-pulse" />
             </div>
             <div className="max-w-md space-y-1.5">
@@ -742,13 +786,13 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                   placeholder="Paste Google Maps API Key"
                   value={customKey}
                   onChange={(e) => setCustomKey(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-stone-200 placeholder-stone-400 focus:outline-none focus:border-amber-500"
+                  className="flex-1 px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-xs text-stone-200 placeholder-stone-400 focus:outline-none focus:border-cyan-500"
                 />
                 <button
                   type="button"
                   onClick={() => handleSaveCustomKey(customKey)}
                   disabled={!customKey.trim()}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50"
+                  className={`px-4 py-2 ${themeConfig.accentBg} text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer`}
                 >
                   Save
                 </button>
@@ -759,7 +803,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
                   href="https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_mcp_codeassist_v1_aistudio"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-amber-400 hover:text-amber-300 flex items-center space-x-1"
+                  className={`${themeConfig.accentText} hover:underline flex items-center space-x-1 font-semibold`}
                 >
                   <span>Get free Maps Demo Key</span>
                   <ExternalLink className="w-3 h-3" />

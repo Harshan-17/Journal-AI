@@ -65,10 +65,26 @@ export function formatRelativeDate(timestamp: number): string {
   const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
   if (diffHours < 24 && now.getDate() === date.getDate()) {
-    return `Today at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    return `Today, ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   }
   if (diffHours < 48 && now.getDate() - date.getDate() === 1) {
-    return `Yesterday at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    return `Yesterday, ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
   }
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
+
+/**
+ * Returns a category group name for list segmentation
+ */
+export function getDateGroup(timestamp: number): 'Today' | 'Yesterday' | 'Previous 7 Days' | 'Older' {
+  if (!timestamp) return 'Older';
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0 && now.getDate() === date.getDate()) return 'Today';
+  if (diffDays <= 1) return 'Yesterday';
+  if (diffDays < 7) return 'Previous 7 Days';
+  return 'Older';
+}
+

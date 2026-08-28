@@ -226,7 +226,7 @@ app.get('/api/maps/config', (req: Request, res: Response): void => {
   res.json({ apiKey: apiKey.trim() });
 });
 
-// Google Maps Geocoding & Reverse Geocoding Backend Proxy
+// Google Maps Geocoding & Place Search Backend Proxy with multi-tier fallback
 app.get('/api/maps/geocode', async (req: Request, res: Response): Promise<void> => {
   try {
     const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
@@ -247,7 +247,7 @@ app.get('/api/maps/geocode', async (req: Request, res: Response): Promise<void> 
         params.append('key', apiKey);
 
         const gmapsRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
-        const gmapsData = await gmapsRes.json();
+        const gmapsData: any = await gmapsRes.json();
 
         if (gmapsData && gmapsData.status === 'OK' && Array.isArray(gmapsData.results) && gmapsData.results.length > 0) {
           res.json(gmapsData);
@@ -262,36 +262,38 @@ app.get('/api/maps/geocode', async (req: Request, res: Response): Promise<void> 
     if (address) {
       try {
         const osmRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&addressdetails=1&limit=5`,
           {
             headers: {
-              'User-Agent': 'MindLog-GeminiReflection/1.0',
+              'User-Agent': 'MindLog-GeminiReflection/1.0 (contact: admin@example.com)',
               'Accept-Language': 'en',
             },
           }
         );
-        const osmData = await osmRes.json();
+        const osmData: any = await osmRes.json();
         if (Array.isArray(osmData) && osmData.length > 0) {
-          const first = osmData[0];
-          const lat = parseFloat(first.lat);
-          const lng = parseFloat(first.lon);
-          res.json({
-            status: 'OK',
-            results: [
+          const formattedResults = osmData.map((item: any) => ({
+            formatted_address: item.display_name,
+            geometry: {
+              location: {
+                lat: parseFloat(item.lat),
+                lng: parseFloat(item.lon),
+              },
+            },
+            place_id: `osm_${item.place_id || item.osm_id || Math.random().toString(36).substring(7)}`,
+            types: [item.type || 'locality'],
+            address_components: [
               {
-                formatted_address: first.display_name,
-                geometry: { location: { lat, lng } },
-                place_id: `osm_${first.place_id || Date.now()}`,
-                types: ['locality'],
-                address_components: [
-                  {
-                    long_name: first.name || address,
-                    short_name: first.name || address,
-                    types: ['locality'],
-                  },
-                ],
+                long_name: item.name || item.address?.city || item.address?.country || address,
+                short_name: item.name || address,
+                types: [item.type || 'locality'],
               },
             ],
+          }));
+
+          res.json({
+            status: 'OK',
+            results: formattedResults,
           });
           return;
         }
@@ -304,15 +306,15 @@ app.get('/api/maps/geocode', async (req: Request, res: Response): Promise<void> 
       const lng = parseFloat(lngStr);
       try {
         const osmRes = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
           {
             headers: {
-              'User-Agent': 'MindLog-GeminiReflection/1.0',
+              'User-Agent': 'MindLog-GeminiReflection/1.0 (contact: admin@example.com)',
               'Accept-Language': 'en',
             },
           }
         );
-        const osmData = await osmRes.json();
+        const osmData: any = await osmRes.json();
         if (osmData && osmData.display_name) {
           res.json({
             status: 'OK',

@@ -11,12 +11,13 @@ import {
   Trash2,
   Calendar,
   X,
-  ChevronRight,
   MapPin,
   Compass,
+  Flame,
 } from 'lucide-react';
 import { JournalEntry, ReflectionMode } from '../types';
-import { formatRelativeDate } from '../utils/sanitize';
+import { formatRelativeDate, getDateGroup } from '../utils/sanitize';
+import { useAppTheme } from '../context/ThemeContext';
 
 interface HistorySidebarProps {
   entries: JournalEntry[];
@@ -45,10 +46,15 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   const [filterMode, setFilterMode] = useState<string>('all');
   const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { themeConfig, celebrate } = useAppTheme();
 
-  // Count entries with locations
+  // Count entries with locations & favorites
   const locationEntriesCount = useMemo(() => {
     return entries.filter((e) => Boolean(e.location?.latitude)).length;
+  }, [entries]);
+
+  const favoritesCount = useMemo(() => {
+    return entries.filter((e) => Boolean(e.isFavorite)).length;
   }, [entries]);
 
   // Filter and search entries
@@ -73,6 +79,19 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     });
   }, [entries, searchQuery, filterMode]);
 
+  // Group entries by chronological category (Today, Yesterday, Previous 7 Days, Earlier)
+  const groupedEntries = useMemo(() => {
+    const groups: { [key: string]: JournalEntry[] } = {};
+    filteredEntries.forEach((entry) => {
+      const groupName = getDateGroup(entry.updatedAt || entry.createdAt);
+      if (!groups[groupName]) {
+        groups[groupName] = [];
+      }
+      groups[groupName].push(entry);
+    });
+    return groups;
+  }, [filteredEntries]);
+
   const handleDeleteConfirm = async (entryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -86,16 +105,28 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     }
   };
 
-  const getModeIcon = (mode: ReflectionMode) => {
+  const getModeBadge = (mode: ReflectionMode) => {
     switch (mode) {
       case 'brainstorm':
-        return <Lightbulb className="w-3.5 h-3.5 text-amber-400" />;
+        return {
+          icon: <Lightbulb className="w-3.5 h-3.5 text-cyan-400" />,
+          bg: 'bg-cyan-950/60 border-cyan-500/30 text-cyan-300',
+        };
       case 'actionable':
-        return <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />;
+        return {
+          icon: <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />,
+          bg: 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300',
+        };
       case 'summarize':
-        return <FileText className="w-3.5 h-3.5 text-sky-400" />;
+        return {
+          icon: <FileText className="w-3.5 h-3.5 text-fuchsia-400" />,
+          bg: 'bg-fuchsia-950/60 border-fuchsia-500/30 text-fuchsia-300',
+        };
       default:
-        return <Sparkles className="w-3.5 h-3.5 text-amber-400" />;
+        return {
+          icon: <Sparkles className="w-3.5 h-3.5 text-violet-400" />,
+          bg: 'bg-violet-950/60 border-violet-500/30 text-violet-300',
+        };
     }
   };
 
@@ -105,28 +136,33 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       {isOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 bg-stone-950/70 backdrop-blur-xs z-20 md:hidden"
+          className="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-20 md:hidden animate-in fade-in"
         />
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-20 w-80 md:w-72 lg:w-80 bg-stone-900 border-r border-stone-800 flex flex-col transition-transform duration-200 ease-in-out ${
+        className={`fixed md:static inset-y-0 left-0 z-20 w-80 md:w-72 lg:w-80 bg-stone-950/90 backdrop-blur-xl border-r border-stone-800/80 flex flex-col transition-all duration-200 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } pt-16 md:pt-0`}
       >
         {/* Sidebar Header & New Entry Button */}
-        <div className="p-4 border-b border-stone-800 space-y-3">
+        <div className="p-4 border-b border-stone-800/80 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-400 flex items-center space-x-1.5">
-              <BookOpen className="w-4 h-4 text-amber-400" />
-              <span>Reflection History</span>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-stone-300 flex items-center space-x-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Reflections</span>
             </h2>
-            <button
-              onClick={onCloseMobile}
-              className="md:hidden p-1 text-stone-400 hover:text-stone-200 rounded-lg"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-900 border border-stone-800 text-stone-300">
+                {entries.length} {entries.length === 1 ? 'log' : 'logs'}
+              </span>
+              <button
+                onClick={onCloseMobile}
+                className="md:hidden p-1 text-stone-400 hover:text-stone-200 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -136,10 +172,10 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 onNewEntry();
                 onCloseMobile();
               }}
-              className="flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-semibold text-xs rounded-xl shadow-sm transition-all"
+              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 ${themeConfig.accentBg} text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer`}
             >
               <Plus className="w-4 h-4" />
-              <span>New Session</span>
+              <span>New Entry</span>
             </button>
 
             {onOpenMapView && (
@@ -149,11 +185,11 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                   onOpenMapView();
                   onCloseMobile();
                 }}
-                className="flex items-center space-x-1.5 py-2.5 px-3 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-xs font-semibold rounded-xl transition-all"
-                title="View all pinned reflections on the global map"
+                className={`flex items-center space-x-1.5 py-2.5 px-3 bg-stone-900 hover:bg-stone-850 hover:${themeConfig.accentText} border border-stone-800 hover:${themeConfig.accentBorder} text-xs font-semibold rounded-xl transition-all active:scale-95 cursor-pointer`}
+                title="View places on interactive map"
               >
-                <Compass className="w-4 h-4 text-amber-400" />
-                <span className="hidden sm:inline">Atlas</span>
+                <Compass className="w-4 h-4 text-cyan-400" />
+                <span className="hidden sm:inline">Places</span>
               </button>
             )}
           </div>
@@ -164,38 +200,38 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             <input
               id="input-search-history"
               type="text"
-              placeholder="Search entries or locations..."
+              placeholder="Search thoughts, tags, places..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-stone-950/80 border border-stone-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-200 placeholder-stone-400 focus:outline-none focus:border-amber-500/60 transition-colors"
+              className="w-full bg-stone-900/90 border border-stone-800/80 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-200 placeholder-stone-400 focus:outline-none focus:border-cyan-500/50 transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-2 text-stone-400 hover:text-stone-200"
+                className="absolute right-2.5 top-2 text-stone-400 hover:text-stone-200 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Filter Pills */}
+          {/* Filter Tabs */}
           <div className="flex items-center space-x-1 overflow-x-auto pb-1 text-[11px] scrollbar-none">
             {[
               { id: 'all', label: 'All' },
-              { id: 'favorites', label: '★ Favorites' },
-              { id: 'locations', label: `📍 Places (${locationEntriesCount})` },
-              { id: 'reflect', label: 'Reflect' },
+              { id: 'favorites', label: `⭐ (${favoritesCount})` },
+              { id: 'locations', label: `📍 (${locationEntriesCount})` },
+              { id: 'reflect', label: 'Perspective' },
               { id: 'brainstorm', label: 'Ideas' },
               { id: 'actionable', label: 'Actions' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setFilterMode(tab.id)}
-                className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all cursor-pointer ${
                   filterMode === tab.id
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
+                    ? `${themeConfig.accentBorder} ${themeConfig.accentText} bg-stone-900/90 shadow-xs border`
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
                 }`}
               >
                 {tab.label}
@@ -204,150 +240,171 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
           </div>
         </div>
 
-        {/* Entries List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {/* Chronologically Grouped Entries List */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
           {filteredEntries.length === 0 ? (
             <div className="text-center py-12 px-4 space-y-2">
-              <Calendar className="w-8 h-8 text-stone-400 mx-auto" />
-              <p className="text-xs font-medium text-stone-400">
-                {searchQuery ? 'No matching entries found.' : 'No reflections saved yet.'}
+              <Calendar className="w-8 h-8 text-stone-500 mx-auto opacity-60" />
+              <p className="text-xs font-semibold text-stone-300">
+                {searchQuery ? 'No matching reflections.' : 'No entries yet.'}
               </p>
               <p className="text-[11px] text-stone-400">
-                {searchQuery ? 'Try adjusting your search query.' : 'Click "New Reflection" to start your first session with Gemini.'}
+                {searchQuery ? 'Try another keyword or filter.' : 'Click "New Entry" to start reflecting.'}
               </p>
             </div>
           ) : (
-            filteredEntries.map((entry) => {
-              const isSelected = entry.id === selectedEntryId;
-              const isConfirmingDelete = entryToDelete === entry.id;
+            Object.entries(groupedEntries).map(([groupTitle, groupItems]) => (
+              <div key={groupTitle} className="space-y-1.5">
+                <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-stone-400">
+                  {groupTitle}
+                </div>
+                <div className="space-y-1.5">
+                  {groupItems.map((entry) => {
+                    const isSelected = entry.id === selectedEntryId;
+                    const isConfirmingDelete = entryToDelete === entry.id;
+                    const badge = getModeBadge(entry.mode);
 
-              return (
-                <div
-                  key={entry.id}
-                  id={`entry-card-${entry.id}`}
-                  onClick={() => {
-                    onSelectEntry(entry);
-                    onCloseMobile();
-                  }}
-                  className={`group relative p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-stone-800/90 border-amber-500/50 shadow-sm'
-                      : 'bg-stone-900/40 border-stone-800/60 hover:bg-stone-800/40 hover:border-stone-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center space-x-1.5 min-w-0">
-                      <span className="p-1 rounded-md bg-stone-950/60 border border-stone-800">
-                        {getModeIcon(entry.mode)}
-                      </span>
-                      <h4
-                        className={`text-xs font-medium truncate ${
-                          isSelected ? 'text-amber-300 font-semibold' : 'text-stone-200 group-hover:text-stone-100'
+                    return (
+                      <div
+                        key={entry.id}
+                        id={`entry-card-${entry.id}`}
+                        onClick={() => {
+                          onSelectEntry(entry);
+                          onCloseMobile();
+                        }}
+                        className={`group relative p-3 rounded-2xl border text-left cursor-pointer transition-all ${
+                          isSelected
+                            ? `${themeConfig.sidebarActive} ring-1 ring-white/10 shadow-md backdrop-blur-md`
+                            : 'bg-stone-900/40 border-stone-800/80 hover:bg-stone-900/80 hover:border-stone-700'
                         }`}
                       >
-                        {entry.title || 'Untitled Reflection'}
-                      </h4>
-                    </div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <span className={`p-1 rounded-lg border ${badge.bg}`}>
+                              {badge.icon}
+                            </span>
+                            <h4
+                              className={`text-xs font-semibold truncate ${
+                                isSelected ? themeConfig.accentText : 'text-stone-100 group-hover:text-white'
+                              }`}
+                            >
+                              {entry.title || 'Untitled Reflection'}
+                            </h4>
+                          </div>
 
-                    {/* Star favorite */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleFavorite(entry);
-                      }}
-                      className={`p-1 rounded hover:bg-stone-800 transition-colors ${
-                        entry.isFavorite ? 'text-amber-400' : 'text-stone-400 hover:text-stone-300'
-                      }`}
-                      title={entry.isFavorite ? 'Remove from favorites' : 'Mark as favorite'}
-                    >
-                      <Star className={`w-3.5 h-3.5 ${entry.isFavorite ? 'fill-amber-400' : ''}`} />
-                    </button>
-                  </div>
+                          {/* Star favorite with interactive confetti */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!entry.isFavorite) celebrate(30);
+                              onToggleFavorite(entry);
+                            }}
+                            className={`p-1 rounded-lg hover:bg-stone-800 transition-all active:scale-90 cursor-pointer ${
+                              entry.isFavorite ? 'text-amber-400' : 'text-stone-400 hover:text-amber-300'
+                            }`}
+                            title={entry.isFavorite ? 'Remove from favorites' : 'Mark as favorite'}
+                          >
+                            <Star className={`w-3.5 h-3.5 ${entry.isFavorite ? 'fill-amber-400' : ''}`} />
+                          </button>
+                        </div>
 
-                  {/* Message preview snippet */}
-                  <p className="text-[11px] text-stone-400 line-clamp-2 mt-1.5 leading-relaxed">
-                    {entry.messages.length > 0
-                      ? entry.messages[entry.messages.length - 1].content.replace(/[#*`]/g, '')
-                      : 'Empty session'}
-                  </p>
+                        {/* Message preview snippet */}
+                        <p className="text-[11px] text-stone-400 line-clamp-2 mt-1.5 leading-relaxed">
+                          {entry.messages.length > 0
+                            ? entry.messages[entry.messages.length - 1].content.replace(/[#*`]/g, '')
+                            : 'Empty session'}
+                        </p>
 
-                  {/* Metadata footer */}
-                  <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-stone-800/60 text-[10px] text-stone-400">
-                    <span className="truncate">{formatRelativeDate(entry.updatedAt || entry.createdAt)}</span>
+                        {/* Tags preview */}
+                        {entry.tags && entry.tags.length > 0 && (
+                          <div className="flex items-center gap-1 mt-2 flex-wrap">
+                            {entry.tags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-0.5 rounded-md bg-stone-900 border border-stone-800/80 text-stone-300 text-[10px] font-mono"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
-                    <div className="flex items-center space-x-1.5 shrink-0">
-                      {entry.location && (
-                        <span
-                          className="px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-800/50 text-amber-300 flex items-center space-x-1 max-w-[90px]"
-                          title={entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
-                        >
-                          <MapPin className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-                          <span className="truncate text-[9px]">{entry.location.name || 'Pin'}</span>
-                        </span>
-                      )}
+                        {/* Metadata footer */}
+                        <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-stone-800/60 text-[10px] text-stone-400">
+                          <span className="truncate">{formatRelativeDate(entry.updatedAt || entry.createdAt)}</span>
 
-                      <span className="px-1.5 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-400">
-                        {entry.messages.length} msg{entry.messages.length === 1 ? '' : 's'}
-                      </span>
+                          <div className="flex items-center space-x-1.5 shrink-0">
+                            {entry.location && (
+                              <span
+                                className="px-1.5 py-0.5 rounded-md bg-cyan-950/50 border border-cyan-800/40 text-cyan-300 flex items-center space-x-1 max-w-[85px]"
+                                title={entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
+                              >
+                                <MapPin className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+                                <span className="truncate text-[9px]">{entry.location.name || 'Pin'}</span>
+                              </span>
+                            )}
 
-                      {entry.summary && (
-                        <span className="px-1.5 py-0.5 rounded bg-sky-950/60 border border-sky-800/50 text-sky-400">
-                          Summary
-                        </span>
-                      )}
+                            <span className="px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-300">
+                              {entry.messages.length} msg{entry.messages.length === 1 ? '' : 's'}
+                            </span>
 
-                      {/* Delete button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEntryToDelete(entry.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity"
-                        title="Delete reflection"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                            {/* Delete button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEntryToDelete(entry.id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity cursor-pointer"
+                              title="Delete reflection"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
 
-                  {/* Inline Delete Confirmation Popover */}
-                  {isConfirmingDelete && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute inset-0 bg-stone-950/95 border border-rose-800/80 rounded-xl p-3 flex flex-col justify-between z-10 animate-in fade-in duration-150"
-                    >
-                      <p className="text-xs text-rose-200 font-medium">Delete this reflection from Firestore?</p>
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEntryToDelete(null);
-                          }}
-                          className="px-2.5 py-1 text-[11px] text-stone-300 hover:bg-stone-800 rounded-lg"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          disabled={isDeleting}
-                          onClick={(e) => handleDeleteConfirm(entry.id, e)}
-                          className="px-2.5 py-1 text-[11px] bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg disabled:opacity-50"
-                        >
-                          {isDeleting ? 'Deleting...' : 'Delete'}
-                        </button>
+                        {/* Inline Delete Confirmation */}
+                        {isConfirmingDelete && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute inset-0 bg-stone-950/95 border border-rose-800/80 rounded-2xl p-3 flex flex-col justify-between z-10 animate-in fade-in duration-150 backdrop-blur-md"
+                          >
+                            <p className="text-xs text-rose-200 font-semibold">Delete this reflection?</p>
+                            <div className="flex items-center justify-end space-x-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEntryToDelete(null);
+                                }}
+                                className="px-2.5 py-1 text-[11px] text-stone-300 hover:bg-stone-800 rounded-lg cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                disabled={isDeleting}
+                                onClick={(e) => handleDeleteConfirm(entry.id, e)}
+                                className="px-2.5 py-1 text-[11px] bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg disabled:opacity-50 cursor-pointer"
+                              >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
 
         {/* Sidebar Footer count */}
-        <div className="p-3 border-t border-stone-800 text-center text-[11px] text-stone-400 font-mono">
-          {entries.length} Isolated Firestore Document{entries.length === 1 ? '' : 's'}
+        <div className="p-3 border-t border-stone-800/80 text-center text-[11px] text-stone-400 bg-stone-950/60">
+          <span>{entries.length} reflection{entries.length === 1 ? '' : 's'} logged</span>
         </div>
       </aside>
     </>
   );
 };
+
+
