@@ -1,8 +1,9 @@
 import React from 'react';
-import { Sparkles, Shield, LogOut, Plus, User, Menu, Compass, Eye } from 'lucide-react';
+import { Shield, LogOut, Plus, User, Menu, Compass, Eye } from 'lucide-react';
 import { UserProfile } from '../types';
 import { useAppTheme } from '../context/ThemeContext';
 import { ThemePickerPopover } from './ThemePickerPopover';
+import { JournalGemLogo } from './JournalGemLogo';
 
 interface NavbarProps {
   user: UserProfile | null;
@@ -29,7 +30,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { themeConfig } = useAppTheme();
 
   return (
-    <header className="sticky top-0 z-30 bg-stone-950/80 backdrop-blur-xl border-b border-stone-800/80 text-stone-100 transition-colors duration-300">
+    <header
+      className={`sticky top-0 z-30 text-stone-100 transition-all duration-300 ${
+        user
+          ? 'bg-stone-950/80 backdrop-blur-xl border-b border-stone-800/80'
+          : 'bg-transparent border-b border-transparent'
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between">
         {/* Left: Brand & Sidebar toggle */}
         <div className="flex items-center space-x-3">
@@ -44,21 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Menu className="w-5 h-5" />
             </button>
           )}
-          <div className="flex items-center space-x-2.5">
-            <div
-              className={`w-8 h-8 rounded-xl bg-gradient-to-tr ${themeConfig.primaryGradient} flex items-center justify-center text-stone-950 shadow-md transition-all duration-500`}
-            >
-              <Sparkles className="w-4 h-4 fill-stone-950/20" />
-            </div>
-            <div>
-              <span className={`font-bold text-base tracking-tight block leading-tight bg-gradient-to-r ${themeConfig.textGradient} bg-clip-text text-transparent`}>
-                Reflect
-              </span>
-              <span className="text-[10px] font-mono text-stone-400 block leading-tight">
-                Mindful AI Journal
-              </span>
-            </div>
-          </div>
+          <JournalGemLogo size="md" />
         </div>
 
         {/* Center: Clean Save State */}

@@ -1,6 +1,6 @@
 {
-  "name": "Gemini Reflection Journal",
-  "description": "A private, user-authenticated reflection journal and conversational brainstorming partner powered by Gemini 3.6 Flash and Cloud Firestore.",
+  "name": "JournalGem",
+  "description": "A private, user-authenticated reflection journal and conversational brainstorming companion powered by Gemini 3.6 Flash and Cloud Firestore with gemstone visual styling.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
