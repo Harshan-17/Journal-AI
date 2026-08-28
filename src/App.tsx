@@ -23,8 +23,9 @@ import { JournalEditor } from './components/JournalEditor';
 import { SecurityBadgeModal } from './components/SecurityBadgeModal';
 import { SummaryModal } from './components/SummaryModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
+import { EntriesMapViewModal } from './components/EntriesMapViewModal';
 import { JournalEntry, JournalMessage, ReflectionMode, UserProfile } from './types';
-import { sanitizePayload, formatTimestamp } from './utils/sanitize';
+import { sanitizePayload, formatTimestamp, isValidCoordinate } from './utils/sanitize';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -41,6 +42,7 @@ export default function App() {
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [isFirebaseConfigModalOpen, setIsFirebaseConfigModalOpen] = useState(false);
+  const [isMapViewOpen, setIsMapViewOpen] = useState(false);
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
 
   // 1. Listen for Authentication state changes (Firebase Auth)
@@ -106,6 +108,19 @@ export default function App() {
           const loadedEntries: JournalEntry[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
+            const locationData =
+              data.location && isValidCoordinate(data.location.latitude, data.location.longitude)
+                ? {
+                    latitude: Number(data.location.latitude),
+                    longitude: Number(data.location.longitude),
+                    placeId: data.location.placeId ? String(data.location.placeId) : undefined,
+                    name: data.location.name ? String(data.location.name) : undefined,
+                    formattedAddress: data.location.formattedAddress
+                      ? String(data.location.formattedAddress)
+                      : undefined,
+                  }
+                : undefined;
+
             loadedEntries.push({
               id: docSnap.id,
               userId: user.uid,
@@ -114,6 +129,7 @@ export default function App() {
               messages: Array.isArray(data.messages) ? data.messages : [],
               tags: Array.isArray(data.tags) ? data.tags : [],
               summary: data.summary || undefined,
+              location: locationData,
               isFavorite: Boolean(data.isFavorite),
               createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
               updatedAt:
@@ -178,12 +194,26 @@ export default function App() {
     const docPath = `users/${user.uid}/entries/${entryToSave.id}`;
 
     try {
+      const locationPayload =
+        entryToSave.location && isValidCoordinate(entryToSave.location.latitude, entryToSave.location.longitude)
+          ? {
+              latitude: Number(entryToSave.location.latitude),
+              longitude: Number(entryToSave.location.longitude),
+              placeId: entryToSave.location.placeId ? String(entryToSave.location.placeId) : null,
+              name: entryToSave.location.name ? String(entryToSave.location.name) : null,
+              formattedAddress: entryToSave.location.formattedAddress
+                ? String(entryToSave.location.formattedAddress)
+                : null,
+            }
+          : null;
+
       const sanitized = sanitizePayload({
         title: entryToSave.title,
         mode: entryToSave.mode,
         messages: entryToSave.messages,
         tags: entryToSave.tags || [],
         summary: entryToSave.summary || null,
+        location: locationPayload,
         isFavorite: Boolean(entryToSave.isFavorite),
         createdAt: entryToSave.createdAt,
         updatedAt: entryToSave.updatedAt || Date.now(),
@@ -461,6 +491,9 @@ export default function App() {
           onSignIn={async () => {
             await signInWithGoogle();
           }}
+          onSignInGuest={async () => {
+            await signInGuestMode();
+          }}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
         />
@@ -526,6 +559,7 @@ export default function App() {
           onNewEntry={handleNewEntry}
           onDeleteEntry={handleDeleteEntry}
           onToggleFavorite={handleToggleFavorite}
+          onOpenMapView={() => setIsMapViewOpen(true)}
           isOpen={isSidebarOpenMobile}
           onCloseMobile={() => setIsSidebarOpenMobile(false)}
         />
@@ -561,6 +595,16 @@ export default function App() {
       <FirebaseConfigModal
         isOpen={isFirebaseConfigModalOpen}
         onClose={() => setIsFirebaseConfigModalOpen(false)}
+      />
+
+      {/* Global Atlas / Maps View Modal */}
+      <EntriesMapViewModal
+        isOpen={isMapViewOpen}
+        onClose={() => setIsMapViewOpen(false)}
+        entries={entries}
+        onSelectEntry={(entry) => {
+          setSelectedEntryId(entry.id);
+        }}
       />
 
       {/* Synthesis & Insights Modal */}

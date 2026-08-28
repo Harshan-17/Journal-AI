@@ -12,6 +12,8 @@ import {
   Calendar,
   X,
   ChevronRight,
+  MapPin,
+  Compass,
 } from 'lucide-react';
 import { JournalEntry, ReflectionMode } from '../types';
 import { formatRelativeDate } from '../utils/sanitize';
@@ -23,6 +25,7 @@ interface HistorySidebarProps {
   onNewEntry: () => void;
   onDeleteEntry: (entryId: string) => Promise<void>;
   onToggleFavorite: (entry: JournalEntry) => Promise<void>;
+  onOpenMapView?: () => void;
   isOpen: boolean;
   onCloseMobile: () => void;
 }
@@ -34,6 +37,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   onNewEntry,
   onDeleteEntry,
   onToggleFavorite,
+  onOpenMapView,
   isOpen,
   onCloseMobile,
 }) => {
@@ -41,6 +45,11 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
   const [filterMode, setFilterMode] = useState<string>('all');
   const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Count entries with locations
+  const locationEntriesCount = useMemo(() => {
+    return entries.filter((e) => Boolean(e.location?.latitude)).length;
+  }, [entries]);
 
   // Filter and search entries
   const filteredEntries = useMemo(() => {
@@ -50,13 +59,16 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         searchQuery.trim() === '' ||
         entry.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.messages.some((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (entry.tags && entry.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())));
+        (entry.tags && entry.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+        (entry.location?.name && entry.location.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (entry.location?.formattedAddress && entry.location.formattedAddress.toLowerCase().includes(searchQuery.toLowerCase()));
 
       if (!matchesSearch) return false;
 
-      // Mode / Favorite filter
+      // Mode / Favorite / Location filter
       if (filterMode === 'all') return true;
       if (filterMode === 'favorites') return Boolean(entry.isFavorite);
+      if (filterMode === 'locations') return Boolean(entry.location?.latitude);
       return entry.mode === filterMode;
     });
   }, [entries, searchQuery, filterMode]);
@@ -117,17 +129,34 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             </button>
           </div>
 
-          <button
-            id="btn-sidebar-new-entry"
-            onClick={() => {
-              onNewEntry();
-              onCloseMobile();
-            }}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-semibold text-xs rounded-xl shadow-sm transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Reflection Session</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              id="btn-sidebar-new-entry"
+              onClick={() => {
+                onNewEntry();
+                onCloseMobile();
+              }}
+              className="flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-semibold text-xs rounded-xl shadow-sm transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Session</span>
+            </button>
+
+            {onOpenMapView && (
+              <button
+                id="btn-open-atlas"
+                onClick={() => {
+                  onOpenMapView();
+                  onCloseMobile();
+                }}
+                className="flex items-center space-x-1.5 py-2.5 px-3 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-xs font-semibold rounded-xl transition-all"
+                title="View all pinned reflections on the global map"
+              >
+                <Compass className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Atlas</span>
+              </button>
+            )}
+          </div>
 
           {/* Search Input */}
           <div className="relative">
@@ -135,7 +164,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             <input
               id="input-search-history"
               type="text"
-              placeholder="Search entries or insights..."
+              placeholder="Search entries or locations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-stone-950/80 border border-stone-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-200 placeholder-stone-400 focus:outline-none focus:border-amber-500/60 transition-colors"
@@ -155,6 +184,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
             {[
               { id: 'all', label: 'All' },
               { id: 'favorites', label: '★ Favorites' },
+              { id: 'locations', label: `📍 Places (${locationEntriesCount})` },
               { id: 'reflect', label: 'Reflect' },
               { id: 'brainstorm', label: 'Ideas' },
               { id: 'actionable', label: 'Actions' },
@@ -245,7 +275,17 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                   <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-stone-800/60 text-[10px] text-stone-400">
                     <span className="truncate">{formatRelativeDate(entry.updatedAt || entry.createdAt)}</span>
 
-                    <div className="flex items-center space-x-2 shrink-0">
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      {entry.location && (
+                        <span
+                          className="px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-800/50 text-amber-300 flex items-center space-x-1 max-w-[90px]"
+                          title={entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
+                        >
+                          <MapPin className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                          <span className="truncate text-[9px]">{entry.location.name || 'Pin'}</span>
+                        </span>
+                      )}
+
                       <span className="px-1.5 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-400">
                         {entry.messages.length} msg{entry.messages.length === 1 ? '' : 's'}
                       </span>

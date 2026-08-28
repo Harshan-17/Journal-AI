@@ -24,6 +24,22 @@ export function sanitizePayload<T>(obj: T): T {
 }
 
 /**
+ * Validates coordinate bounds according to standard WGS84 geography
+ */
+export function isValidCoordinate(latitude: number, longitude: number): boolean {
+  return (
+    typeof latitude === 'number' &&
+    !isNaN(latitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    typeof longitude === 'number' &&
+    !isNaN(longitude) &&
+    longitude >= -180 &&
+    longitude <= 180
+  );
+}
+
+/**
  * Format timestamp to a human-readable date string
  */
 export function formatTimestamp(timestamp: number): string {

@@ -220,6 +220,147 @@ app.get('/api/gemini/prompts', async (_req: Request, res: Response): Promise<voi
   }
 });
 
+// Google Maps Client Config
+app.get('/api/maps/config', (req: Request, res: Response): void => {
+  const apiKey = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || '';
+  res.json({ apiKey: apiKey.trim() });
+});
+
+// Google Maps Geocoding & Reverse Geocoding Backend Proxy
+app.get('/api/maps/geocode', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const address = typeof req.query.address === 'string' ? req.query.address.trim() : '';
+    const latlng = typeof req.query.latlng === 'string' ? req.query.latlng.trim() : '';
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || '';
+
+    if (!address && !latlng) {
+      res.status(400).json({ error: 'Either address or latlng query parameter is required.' });
+      return;
+    }
+
+    // 1. If an API key is available, attempt Google Maps REST Geocoding API first
+    if (apiKey) {
+      try {
+        const params = new URLSearchParams();
+        if (address) params.append('address', address);
+        if (latlng) params.append('latlng', latlng);
+        params.append('key', apiKey);
+
+        const gmapsRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
+        const gmapsData = await gmapsRes.json();
+
+        if (gmapsData && gmapsData.status === 'OK' && Array.isArray(gmapsData.results) && gmapsData.results.length > 0) {
+          res.json(gmapsData);
+          return;
+        }
+      } catch (gmapsErr) {
+        console.warn('Google Maps REST geocoding issue, trying fallback service:', gmapsErr);
+      }
+    }
+
+    // 2. High-Availability Global Fallback (OpenStreetMap Nominatim)
+    if (address) {
+      try {
+        const osmRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+          {
+            headers: {
+              'User-Agent': 'MindLog-GeminiReflection/1.0',
+              'Accept-Language': 'en',
+            },
+          }
+        );
+        const osmData = await osmRes.json();
+        if (Array.isArray(osmData) && osmData.length > 0) {
+          const first = osmData[0];
+          const lat = parseFloat(first.lat);
+          const lng = parseFloat(first.lon);
+          res.json({
+            status: 'OK',
+            results: [
+              {
+                formatted_address: first.display_name,
+                geometry: { location: { lat, lng } },
+                place_id: `osm_${first.place_id || Date.now()}`,
+                types: ['locality'],
+                address_components: [
+                  {
+                    long_name: first.name || address,
+                    short_name: first.name || address,
+                    types: ['locality'],
+                  },
+                ],
+              },
+            ],
+          });
+          return;
+        }
+      } catch (osmErr) {
+        console.warn('OSM forward geocode fallback error:', osmErr);
+      }
+    } else if (latlng) {
+      const [latStr, lngStr] = latlng.split(',');
+      const lat = parseFloat(latStr);
+      const lng = parseFloat(lngStr);
+      try {
+        const osmRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+          {
+            headers: {
+              'User-Agent': 'MindLog-GeminiReflection/1.0',
+              'Accept-Language': 'en',
+            },
+          }
+        );
+        const osmData = await osmRes.json();
+        if (osmData && osmData.display_name) {
+          res.json({
+            status: 'OK',
+            results: [
+              {
+                formatted_address: osmData.display_name,
+                geometry: { location: { lat, lng } },
+                place_id: `osm_rev_${lat.toFixed(4)}_${lng.toFixed(4)}`,
+                types: ['point_of_interest'],
+                address_components: [
+                  {
+                    long_name: osmData.name || osmData.address?.city || osmData.address?.country || 'Pinned Location',
+                    short_name: osmData.name || 'Pinned Location',
+                    types: ['point_of_interest'],
+                  },
+                ],
+              },
+            ],
+          });
+          return;
+        }
+      } catch (osmErr) {
+        console.warn('OSM reverse geocode fallback error:', osmErr);
+      }
+
+      // Safe coordinate fallback
+      res.json({
+        status: 'OK',
+        results: [
+          {
+            formatted_address: `Coordinates: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+            geometry: { location: { lat, lng } },
+            place_id: `coord_${lat.toFixed(4)}_${lng.toFixed(4)}`,
+            types: ['point_of_interest'],
+            address_components: [{ long_name: 'Pinned Point', short_name: 'Point', types: ['point_of_interest'] }],
+          },
+        ],
+      });
+      return;
+    }
+
+    res.json({ status: 'ZERO_RESULTS', results: [] });
+  } catch (err: any) {
+    console.error('Error in /api/maps/geocode proxy:', err);
+    res.status(500).json({ error: 'Failed to communicate with Geocoding service.' });
+  }
+});
+
 // 4. Vite Dev Middleware & Static Asset Delivery
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

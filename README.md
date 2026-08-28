@@ -133,10 +133,10 @@ Every user interaction has a corresponding test specification below:
   - *Expected Result*: Calls `/api/gemini/summarize`, generates core takeaways and action steps, updates Firestore document `summary` field, and opens the Summary Modal.
 - **TC-3.2: Export Transcript & Markdown**
   - *Action*: Click "Export Markdown" or "Export Transcript".
-  - *Expected Result*: Downloads structured `.md` file containing the complete reflection session and summary.
+  - *Expected Result*: Downloads structured `.md` file containing the complete reflection session, summary, and pinned geographic location coordinates.
 - **TC-3.3: History Search & Filtering**
-  - *Action*: Enter search keywords or toggle filter pills (All, Favorites, Ideas, Actions).
-  - *Expected Result*: Sidebar dynamically filters entries matching query in real time.
+  - *Action*: Enter search keywords or toggle filter pills (All, Favorites, Places, Ideas, Actions).
+  - *Expected Result*: Sidebar dynamically filters entries matching query or locations in real time.
 - **TC-3.4: Favorite Toggle**
   - *Action*: Click the star icon on any entry card.
   - *Expected Result*: Toggles `isFavorite` flag and updates Firestore document in real time.
@@ -146,3 +146,18 @@ Every user interaction has a corresponding test specification below:
 - **TC-3.6: Sign Out Flow**
   - *Action*: Click Sign Out icon in Navbar.
   - *Expected Result*: Terminates Firebase session, clears local state, and returns to landing page.
+
+### Test Suite 4: Location-Aware Reflections (Google Maps Integration)
+- **TC-4.1: Pin Location to Reflection**
+  - *Action*: In the Journal Editor, click "Pin Location" (or location badge).
+  - *Expected Result*: Opens the interactive `LocationPickerModal` with search autocomplete and click-to-pin vector map.
+- **TC-4.2: Location Search & Geocoding**
+  - *Action*: Search for an address or place (e.g., "Golden Gate Park, San Francisco") and select a result.
+  - *Expected Result*: Smoothly pans map to target coordinates, positions the Advanced Marker pin, and captures address details.
+- **TC-4.3: Secure Coordinate Sanitization & Firestore Persistence**
+  - *Action*: Click "Confirm & Attach Location".
+  - *Expected Result*: Validates coordinate bounds (`-90 <= lat <= 90`, `-180 <= lng <= 180`), strips undefined values, persists to `/users/{uid}/entries/{entryId}`, and updates the header location badge.
+- **TC-4.4: Global Atlas Map View**
+  - *Action*: Click the "Atlas" button in the history sidebar or location filter.
+  - *Expected Result*: Opens `EntriesMapViewModal` displaying all pinned reflections globally on an interactive Google Map with custom markers and reflection preview cards.
+

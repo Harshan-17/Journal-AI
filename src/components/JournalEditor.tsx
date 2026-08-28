@@ -13,10 +13,13 @@ import {
   RefreshCw,
   Clock,
   ChevronDown,
+  MapPin,
+  X,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { JournalEntry, JournalMessage, ReflectionMode, PromptIdea } from '../types';
+import { JournalEntry, JournalMessage, ReflectionMode, PromptIdea, JournalLocation } from '../types';
 import { formatTimestamp } from '../utils/sanitize';
+import { LocationPickerModal } from './LocationPickerModal';
 
 interface JournalEditorProps {
   entry: JournalEntry;
@@ -44,6 +47,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [promptIdeas, setPromptIdeas] = useState<PromptIdea[]>([]);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,6 +102,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const handleExportTranscript = () => {
     let transcript = `# ${entry.title || 'Journal Reflection'}\n`;
     transcript += `Date: ${formatTimestamp(entry.createdAt)}\n`;
+    if (entry.location) {
+      transcript += `Location: ${entry.location.name || 'Pinned Location'} (${entry.location.formattedAddress || `${entry.location.latitude}, ${entry.location.longitude}`})\n`;
+    }
     transcript += `Mode: ${entry.mode}\n\n---\n\n`;
 
     entry.messages.forEach((msg) => {
@@ -152,7 +159,48 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center space-x-2 shrink-0">
+        <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-y-2">
+          {/* Location Pin Pill / Action */}
+          {entry.location ? (
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-amber-300 bg-amber-950/60 hover:bg-amber-900/60 border border-amber-800/60 rounded-xl transition-colors group">
+              <button
+                id="btn-edit-location"
+                type="button"
+                onClick={() => setIsLocationModalOpen(true)}
+                className="flex items-center space-x-1.5 min-w-0"
+                title="View or change pinned location on Google Map"
+              >
+                <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="truncate max-w-[130px] sm:max-w-[180px]">
+                  {entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
+                </span>
+              </button>
+              <button
+                id="btn-remove-location-quick"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateEntry({ location: undefined });
+                }}
+                className="text-stone-400 hover:text-rose-400 p-0.5 rounded transition-colors ml-1"
+                title="Remove location"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              id="btn-pin-location"
+              type="button"
+              onClick={() => setIsLocationModalOpen(true)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-stone-300 hover:text-stone-100 bg-stone-800 hover:bg-stone-700 rounded-xl transition-colors"
+              title="Pin a location to this reflection using Google Maps"
+            >
+              <MapPin className="w-3.5 h-3.5 text-amber-400" />
+              <span>Pin Location</span>
+            </button>
+          )}
+
           {entry.summary ? (
             <button
               id="btn-view-summary"
@@ -397,6 +445,16 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        currentLocation={entry.location}
+        onSaveLocation={(loc) => {
+          onUpdateEntry({ location: loc || undefined });
+        }}
+      />
     </div>
   );
 };

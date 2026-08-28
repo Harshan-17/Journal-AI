@@ -29,6 +29,17 @@
           "description": "Tags associated with reflection"
         },
         "summary": { "type": "string", "maxLength": 5000 },
+        "location": {
+          "type": "object",
+          "description": "Geographic pin and location metadata attached to the reflection",
+          "properties": {
+            "placeId": { "type": "string" },
+            "name": { "type": "string" },
+            "formattedAddress": { "type": "string" },
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" }
+          }
+        },
         "isFavorite": { "type": "boolean" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }

@@ -1,5 +1,13 @@
 export type ReflectionMode = 'reflect' | 'brainstorm' | 'summarize' | 'actionable';
 
+export interface JournalLocation {
+  placeId?: string;
+  name?: string;
+  formattedAddress?: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface JournalMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -16,6 +24,7 @@ export interface JournalEntry {
   messages: JournalMessage[];
   tags: string[];
   summary?: string;
+  location?: JournalLocation;
   isFavorite?: boolean;
   createdAt: number; // Unix timestamp ms
   updatedAt: number; // Unix timestamp ms
