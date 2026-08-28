@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "JournalMessage": {
+      "title": "JournalMessage",
+      "description": "A single interaction turn in a reflection session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "maxLength": 10000 },
+        "timestamp": { "type": "string" },
+        "modelUsed": { "type": "string" }
+      },
+      "required": ["id", "role", "content", "timestamp"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "User reflection journal session containing full conversation history",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "mode": { "type": "string", "enum": ["reflect", "brainstorm", "summarize", "actionable"] },
+        "messages": {
+          "type": "array",
+          "description": "Array of conversation interaction turns"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags associated with reflection"
+        },
+        "summary": { "type": "string", "maxLength": 5000 },
+        "isFavorite": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["title", "mode", "messages", "createdAt", "updatedAt"]
+    },
+    "Interaction": {
+      "title": "Interaction",
+      "description": "User AI interaction log record",
+      "type": "object",
+      "properties": {
+        "prompt": { "type": "string", "maxLength": 10000 },
+        "response": { "type": "string", "maxLength": 10000 },
+        "mode": { "type": "string" },
+        "modelUsed": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["prompt", "response", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "JournalEntry",
+      "description": "Private journal entries and conversation history belonging to the authenticated user"
+    },
+    "/users/{userId}/interactions/{interactionId}": {
+      "schema": "Interaction",
+      "description": "Private AI interaction logs and reflections"
+    }
+  }
+}

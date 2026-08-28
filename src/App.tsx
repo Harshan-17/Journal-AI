@@ -1,0 +1,577 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  auth,
+  db,
+  signInWithGoogle,
+  signInGuestMode,
+  signOutUser,
+  onAuthStateChanged,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
+import { Navbar } from './components/Navbar';
+import { LandingPage } from './components/LandingPage';
+import { HistorySidebar } from './components/HistorySidebar';
+import { JournalEditor } from './components/JournalEditor';
+import { SecurityBadgeModal } from './components/SecurityBadgeModal';
+import { SummaryModal } from './components/SummaryModal';
+import { FirebaseConfigModal } from './components/FirebaseConfigModal';
+import { JournalEntry, JournalMessage, ReflectionMode, UserProfile } from './types';
+import { sanitizePayload, formatTimestamp } from './utils/sanitize';
+
+export default function App() {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isEntriesLoading, setIsEntriesLoading] = useState(false);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved' | 'error'>('saved');
+  const [error, setError] = useState<string | null>(null);
+
+  // Modals & UI States
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  const [isFirebaseConfigModalOpen, setIsFirebaseConfigModalOpen] = useState(false);
+  const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
+
+  // 1. Listen for Authentication state changes (Firebase Auth)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email || (currentUser.isAnonymous ? 'guest@isolated.session' : ''),
+          displayName:
+            currentUser.displayName ||
+            (currentUser.isAnonymous ? 'Guest Explorer (Private)' : 'Authenticated User'),
+          photoURL: currentUser.photoURL,
+        });
+      } else {
+        setUser(null);
+        setEntries([]);
+        setSelectedEntryId(null);
+      }
+      setIsAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Helper to create a clean fresh entry object
+  const createNewEmptyEntry = useCallback(
+    (userId: string): JournalEntry => {
+      const now = Date.now();
+      return {
+        id: `entry_${now}_${Math.random().toString(36).substring(2, 7)}`,
+        userId,
+        title: 'New Reflection',
+        mode: 'reflect',
+        messages: [],
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+        isFavorite: false,
+      };
+    },
+    []
+  );
+
+  // 2. Real-time Cloud Firestore synchronization across sessions
+  useEffect(() => {
+    if (!user) {
+      setEntries([]);
+      setSelectedEntryId(null);
+      setIsEntriesLoading(false);
+      return;
+    }
+
+    setIsEntriesLoading(true);
+    const collectionPath = `users/${user.uid}/entries`;
+
+    try {
+      const entriesCollectionRef = collection(db, 'users', user.uid, 'entries');
+
+      const unsubscribe = onSnapshot(
+        entriesCollectionRef,
+        (snapshot) => {
+          const loadedEntries: JournalEntry[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            loadedEntries.push({
+              id: docSnap.id,
+              userId: user.uid,
+              title: data.title || 'Untitled Reflection',
+              mode: data.mode || 'reflect',
+              messages: Array.isArray(data.messages) ? data.messages : [],
+              tags: Array.isArray(data.tags) ? data.tags : [],
+              summary: data.summary || undefined,
+              isFavorite: Boolean(data.isFavorite),
+              createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+              updatedAt:
+                typeof data.updatedAt === 'number'
+                  ? data.updatedAt
+                  : typeof data.createdAt === 'number'
+                  ? data.createdAt
+                  : Date.now(),
+            });
+          });
+
+          // Sort by latest update descending
+          loadedEntries.sort((a, b) => b.updatedAt - a.updatedAt);
+
+          setEntries(loadedEntries);
+
+          // Select first entry if current selection is invalid or null
+          setSelectedEntryId((prevId) => {
+            if (prevId && loadedEntries.some((e) => e.id === prevId)) {
+              return prevId;
+            }
+            if (loadedEntries.length > 0) {
+              return loadedEntries[0].id;
+            }
+            return null;
+          });
+
+          setIsEntriesLoading(false);
+        },
+        (firestoreErr) => {
+          // If auth is logging out, silently unmount
+          if (!auth.currentUser) {
+            setIsEntriesLoading(false);
+            return;
+          }
+          console.error('Firestore snapshot subscription error:', firestoreErr);
+          try {
+            handleFirestoreError(firestoreErr, OperationType.GET, collectionPath);
+          } catch (e: any) {
+            setError('Database connection error. Please verify authentication.');
+          }
+          setIsEntriesLoading(false);
+        }
+      );
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.error('Firestore initialization notice:', e);
+      setIsEntriesLoading(false);
+    }
+  }, [user]);
+
+  // Current active entry
+  const currentEntry = entries.find((e) => e.id === selectedEntryId) || null;
+
+  // 3. Persist entry updates directly to Cloud Firestore
+  const persistEntry = async (entryToSave: JournalEntry): Promise<void> => {
+    if (!user) return;
+    setSaveStatus('saving');
+    setError(null);
+
+    const docPath = `users/${user.uid}/entries/${entryToSave.id}`;
+
+    try {
+      const sanitized = sanitizePayload({
+        title: entryToSave.title,
+        mode: entryToSave.mode,
+        messages: entryToSave.messages,
+        tags: entryToSave.tags || [],
+        summary: entryToSave.summary || null,
+        isFavorite: Boolean(entryToSave.isFavorite),
+        createdAt: entryToSave.createdAt,
+        updatedAt: entryToSave.updatedAt || Date.now(),
+      });
+
+      const entryDocRef = doc(db, 'users', user.uid, 'entries', entryToSave.id);
+      await setDoc(entryDocRef, sanitized, { merge: true });
+      setSaveStatus('saved');
+    } catch (saveErr: any) {
+      console.error('Firestore sync error:', saveErr);
+      setSaveStatus('error');
+      try {
+        handleFirestoreError(saveErr, OperationType.WRITE, docPath);
+      } catch (err: any) {
+        setError('Database save issue: ' + (saveErr?.message || 'Please check your connection.'));
+      }
+      throw saveErr;
+    }
+  };
+
+  // Create a new reflection session
+  const handleNewEntry = async () => {
+    if (!user) return;
+    const newEntry = createNewEmptyEntry(user.uid);
+
+    // Optimistically select and persist
+    setEntries((prev) => [newEntry, ...prev]);
+    setSelectedEntryId(newEntry.id);
+
+    try {
+      await persistEntry(newEntry);
+    } catch (err) {
+      console.error('Failed to create new entry in Firestore:', err);
+    }
+  };
+
+  // Update current entry fields (e.g. title, mode)
+  const handleUpdateEntry = async (updatedFields: Partial<JournalEntry>) => {
+    if (!currentEntry) return;
+    const updated = {
+      ...currentEntry,
+      ...updatedFields,
+      updatedAt: Date.now(),
+    };
+
+    setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    try {
+      await persistEntry(updated);
+    } catch (err) {
+      console.error('Update save failed:', err);
+    }
+  };
+
+  // Toggle entry favorite
+  const handleToggleFavorite = async (entry: JournalEntry) => {
+    if (!user) return;
+    const updated = {
+      ...entry,
+      isFavorite: !entry.isFavorite,
+      updatedAt: Date.now(),
+    };
+    setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    try {
+      await persistEntry(updated);
+    } catch (err) {
+      console.error('Favorite toggle failed:', err);
+    }
+  };
+
+  // Delete entry from Firestore
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!user) return;
+    const docPath = `users/${user.uid}/entries/${entryId}`;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'entries', entryId));
+      const remaining = entries.filter((e) => e.id !== entryId);
+      setEntries(remaining);
+
+      if (selectedEntryId === entryId) {
+        setSelectedEntryId(remaining.length > 0 ? remaining[0].id : null);
+      }
+    } catch (err: any) {
+      console.error('Failed to delete entry from Firestore:', err);
+      try {
+        handleFirestoreError(err, OperationType.DELETE, docPath);
+      } catch {
+        setError('Failed to delete reflection from Firestore.');
+      }
+    }
+  };
+
+  // 4. Send Message to Gemini & Guaranteed Transaction Persistence
+  const handleSendMessage = async (userText: string, mode: ReflectionMode) => {
+    if (!user) return;
+
+    let targetEntry = currentEntry;
+    if (!targetEntry) {
+      targetEntry = createNewEmptyEntry(user.uid);
+      setEntries((prev) => [targetEntry!, ...prev]);
+      setSelectedEntryId(targetEntry.id);
+    }
+
+    const now = Date.now();
+    const userMessage: JournalMessage = {
+      id: `msg_user_${now}`,
+      role: 'user',
+      content: userText,
+      timestamp: formatTimestamp(now),
+    };
+
+    // Auto-derive a meaningful title if it's the first message and title is default
+    let newTitle = targetEntry.title;
+    if (targetEntry.messages.length === 0 && (targetEntry.title === 'New Reflection' || !targetEntry.title)) {
+      newTitle = userText.slice(0, 42).trim() + (userText.length > 42 ? '...' : '');
+    }
+
+    const entryWithUserMsg: JournalEntry = {
+      ...targetEntry,
+      title: newTitle,
+      mode,
+      messages: [...targetEntry.messages, userMessage],
+      updatedAt: now,
+    };
+
+    // Optimistically update and persist user turn immediately
+    setEntries((prev) => prev.map((e) => (e.id === entryWithUserMsg.id ? entryWithUserMsg : e)));
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      await persistEntry(entryWithUserMsg);
+    } catch (saveErr) {
+      console.warn('Initial turn save notice:', saveErr);
+    }
+
+    // Call Backend Gemini Server Proxy (/api/gemini/chat)
+    try {
+      const response = await fetch('/api/gemini/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: entryWithUserMsg.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          mode,
+          entryTitle: entryWithUserMsg.title,
+        }),
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `Gemini request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantNow = Date.now();
+      const assistantMessage: JournalMessage = {
+        id: `msg_asst_${assistantNow}`,
+        role: 'assistant',
+        content: data.reply || 'No response generated.',
+        timestamp: formatTimestamp(assistantNow),
+        modelUsed: data.modelUsed,
+      };
+
+      const finalEntry: JournalEntry = {
+        ...entryWithUserMsg,
+        messages: [...entryWithUserMsg.messages, assistantMessage],
+        updatedAt: assistantNow,
+      };
+
+      setEntries((prev) => prev.map((e) => (e.id === finalEntry.id ? finalEntry : e)));
+
+      // Guaranteed transaction persistence to /users/{userId}/entries/{entryId}
+      await persistEntry(finalEntry);
+
+      // Log interaction record to /users/{userId}/interactions/{interactionId}
+      const interactionDocRef = doc(db, 'users', user.uid, 'interactions', `interaction_${assistantNow}`);
+      await setDoc(
+        interactionDocRef,
+        sanitizePayload({
+          id: `interaction_${assistantNow}`,
+          entryId: finalEntry.id,
+          prompt: userText,
+          response: assistantMessage.content,
+          mode,
+          modelUsed: data.modelUsed || 'gemini-3.6-flash',
+          timestamp: assistantNow,
+        }),
+        { merge: true }
+      ).catch((logErr) => console.warn('Interaction logging notice:', logErr));
+    } catch (geminiErr: any) {
+      console.error('Gemini interaction error:', geminiErr);
+      setError(geminiErr.message || 'Gemini was unable to respond. Please retry.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // 5. Generate Structured Summary (/api/gemini/summarize)
+  const handleGenerateSummary = async () => {
+    if (!currentEntry || currentEntry.messages.length === 0) return;
+
+    setIsSummarizing(true);
+    setError(null);
+
+    try {
+      const conversationText = currentEntry.messages
+        .map((m) => `${m.role === 'user' ? 'User' : 'Gemini'}: ${m.content}`)
+        .join('\n\n');
+
+      const response = await fetch('/api/gemini/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: currentEntry.title,
+          content: conversationText,
+        }),
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Summarization request failed.');
+      }
+
+      const data = await response.json();
+      const updated: JournalEntry = {
+        ...currentEntry,
+        summary: data.summary,
+        updatedAt: Date.now(),
+      };
+
+      setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+      await persistEntry(updated);
+      setIsSummaryModalOpen(true);
+    } catch (err: any) {
+      console.error('Summary error:', err);
+      setError(err.message || 'Failed to synthesize summary.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  // Sign out user
+  const handleSignOut = async () => {
+    await signOutUser();
+    setUser(null);
+    setEntries([]);
+    setSelectedEntryId(null);
+  };
+
+  // Loading spinner during initial Firebase Auth state verification
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center space-y-4 text-stone-100">
+        <div className="w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-medium text-stone-400">Verifying secure Firebase session...</p>
+      </div>
+    );
+  }
+
+  // Unauthenticated Landing Page
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-stone-950 flex flex-col font-sans">
+        <Navbar
+          user={null}
+          onSignOut={handleSignOut}
+          onNewEntry={() => {}}
+          onOpenSecurity={() => setIsSecurityModalOpen(true)}
+          onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+          saveStatus="saved"
+        />
+        <LandingPage
+          onSignIn={async () => {
+            await signInWithGoogle();
+          }}
+          onOpenSecurity={() => setIsSecurityModalOpen(true)}
+          onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+        />
+        <SecurityBadgeModal
+          isOpen={isSecurityModalOpen}
+          onClose={() => setIsSecurityModalOpen(false)}
+        />
+        <FirebaseConfigModal
+          isOpen={isFirebaseConfigModalOpen}
+          onClose={() => setIsFirebaseConfigModalOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  // Loading indicator while initial user entries are fetching from Cloud Firestore
+  if (isEntriesLoading && entries.length === 0) {
+    return (
+      <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100">
+        <Navbar
+          user={user}
+          onSignOut={handleSignOut}
+          onNewEntry={() => {}}
+          onOpenSecurity={() => setIsSecurityModalOpen(true)}
+          onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+          saveStatus="saving"
+        />
+        <div className="flex-1 flex flex-col items-center justify-center space-y-4">
+          <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-stone-400">Retrieving your private reflections from Firestore...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Active or Fallback empty entry for dashboard view
+  const activeEntry: JournalEntry =
+    currentEntry ||
+    (entries.length > 0
+      ? entries[0]
+      : createNewEmptyEntry(user.uid));
+
+  return (
+    <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100">
+      {/* Top Navigation */}
+      <Navbar
+        user={user}
+        onSignOut={handleSignOut}
+        onNewEntry={handleNewEntry}
+        onOpenSecurity={() => setIsSecurityModalOpen(true)}
+        onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
+        onToggleSidebar={() => setIsSidebarOpenMobile((prev) => !prev)}
+        saveStatus={saveStatus}
+      />
+
+      {/* Main Authenticated Studio Container */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Reflection History Sidebar */}
+        <HistorySidebar
+          entries={entries}
+          selectedEntryId={activeEntry.id}
+          onSelectEntry={(entry) => setSelectedEntryId(entry.id)}
+          onNewEntry={handleNewEntry}
+          onDeleteEntry={handleDeleteEntry}
+          onToggleFavorite={handleToggleFavorite}
+          isOpen={isSidebarOpenMobile}
+          onCloseMobile={() => setIsSidebarOpenMobile(false)}
+        />
+
+        {/* Center Journal & Reflection Studio */}
+        <JournalEditor
+          entry={activeEntry}
+          onUpdateEntry={handleUpdateEntry}
+          onSendMessage={handleSendMessage}
+          onGenerateSummary={handleGenerateSummary}
+          isGenerating={isGenerating}
+          isSummarizing={isSummarizing}
+          error={error}
+          onRetry={() => {
+            if (activeEntry.messages.length > 0) {
+              const lastUserMsg = [...activeEntry.messages].reverse().find((m) => m.role === 'user');
+              if (lastUserMsg) {
+                handleSendMessage(lastUserMsg.content, activeEntry.mode);
+              }
+            }
+          }}
+          onOpenSummaryModal={() => setIsSummaryModalOpen(true)}
+        />
+      </div>
+
+      {/* Security Specifications Modal */}
+      <SecurityBadgeModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+      />
+
+      {/* Firebase Configuration Modal */}
+      <FirebaseConfigModal
+        isOpen={isFirebaseConfigModalOpen}
+        onClose={() => setIsFirebaseConfigModalOpen(false)}
+      />
+
+      {/* Synthesis & Insights Modal */}
+      {activeEntry.summary && (
+        <SummaryModal
+          isOpen={isSummaryModalOpen}
+          onClose={() => setIsSummaryModalOpen(false)}
+          title={activeEntry.title}
+          summary={activeEntry.summary}
+        />
+      )}
+    </div>
+  );
+}
