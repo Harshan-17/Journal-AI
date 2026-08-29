@@ -25,10 +25,13 @@ import {
 import firebaseConfigJson from '../firebase-applet-config.json';
 import { UserProfile } from './types';
 
-// Process config to replace environment variable placeholders
+// Process config to override with environment variables if present
 const firebaseConfig = { ...firebaseConfigJson };
-if (firebaseConfig.apiKey === '{{ VITE_FIREBASE_API_KEY }}') {
-  firebaseConfig.apiKey = import.meta.env.VITE_FIREBASE_API_KEY || '';
+if (import.meta.env.VITE_FIREBASE_API_KEY) {
+  firebaseConfig.apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+}
+if (import.meta.env.VITE_OAUTH_CLIENT_ID) {
+  firebaseConfig.oAuthClientId = import.meta.env.VITE_OAUTH_CLIENT_ID;
 }
 
 // Initialize Firebase App safely

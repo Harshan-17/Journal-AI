@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, LogOut, Plus, User, Menu, Compass, Eye } from 'lucide-react';
+import { Shield, LogOut, Plus, User, Menu, Compass } from 'lucide-react';
 import { UserProfile } from '../types';
 import { useAppTheme } from '../context/ThemeContext';
 import { ThemePickerPopover } from './ThemePickerPopover';
@@ -13,7 +13,6 @@ interface NavbarProps {
   onOpenFirebaseConfig: () => void;
   onToggleSidebar?: () => void;
   onOpenMapView?: () => void;
-  onOpenClarityLoupe?: () => void;
   saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
 }
 
@@ -24,7 +23,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSecurity,
   onToggleSidebar,
   onOpenMapView,
-  onOpenClarityLoupe,
   saveStatus,
 }) => {
   const { themeConfig } = useAppTheme();
@@ -80,18 +78,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center space-x-2 sm:space-x-2.5">
           {/* Super Cool Theme Switcher Popover */}
           <ThemePickerPopover />
-
-          {onOpenClarityLoupe && (
-            <button
-              id="btn-nav-clarity-loupe"
-              onClick={onOpenClarityLoupe}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-stone-300 hover:${themeConfig.accentText} bg-stone-900/80 hover:bg-stone-800 border border-stone-800 hover:${themeConfig.accentBorder} rounded-xl transition-all active:scale-95 cursor-pointer backdrop-blur-md`}
-              title="Open Halftone Clarity Loupe"
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Clarity Loupe</span>
-            </button>
-          )}
 
           {user && onOpenMapView && (
             <button

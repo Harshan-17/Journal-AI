@@ -16,7 +16,6 @@ interface LandingPageProps {
   onSignInGuest?: () => Promise<void>;
   onOpenSecurity?: () => void;
   onOpenFirebaseConfig?: () => void;
-  onOpenHalftoneModal?: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({

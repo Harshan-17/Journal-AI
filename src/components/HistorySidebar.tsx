@@ -141,12 +141,12 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-20 w-80 md:w-72 lg:w-80 bg-stone-950/90 backdrop-blur-xl border-r border-stone-800/80 flex flex-col transition-all duration-200 ease-in-out ${
+        className={`fixed md:static inset-y-0 left-0 z-20 w-80 md:w-72 lg:w-80 h-full max-h-full min-h-0 bg-stone-950/90 backdrop-blur-xl border-r border-stone-800/80 flex flex-col transition-all duration-200 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } pt-16 md:pt-0`}
       >
         {/* Sidebar Header & New Entry Button */}
-        <div className="p-4 border-b border-stone-800/80 space-y-3">
+        <div className="shrink-0 p-4 border-b border-stone-800/80 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-wider text-stone-300 flex items-center space-x-1.5">
               <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
@@ -241,7 +241,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         </div>
 
         {/* Chronologically Grouped Entries List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4 overscroll-contain">
           {filteredEntries.length === 0 ? (
             <div className="text-center py-12 px-4 space-y-2">
               <Calendar className="w-8 h-8 text-stone-500 mx-auto opacity-60" />
@@ -399,7 +399,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         </div>
 
         {/* Sidebar Footer count */}
-        <div className="p-3 border-t border-stone-800/80 text-center text-[11px] text-stone-400 bg-stone-950/60">
+        <div className="shrink-0 p-3 border-t border-stone-800/80 text-center text-[11px] text-stone-400 bg-stone-950/60">
           <span>{entries.length} reflection{entries.length === 1 ? '' : 's'} logged</span>
         </div>
       </aside>

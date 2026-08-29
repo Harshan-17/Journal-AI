@@ -193,9 +193,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   ];
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-3.75rem)] bg-stone-950/60 backdrop-blur-md text-stone-100 overflow-hidden relative z-10">
+    <div className="flex-1 flex flex-col h-full min-h-0 w-full bg-stone-950/60 backdrop-blur-md text-stone-100 overflow-hidden relative z-10">
       {/* Top Header / Metadata Bar */}
-      <div className="p-4 sm:px-6 border-b border-stone-800/80 bg-stone-950/85 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="shrink-0 p-4 sm:px-6 border-b border-stone-800/80 bg-stone-950/85 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Title & Metadata Editor */}
         <div className="flex-1 min-w-0 space-y-1">
           <input
@@ -363,7 +363,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       </div>
 
       {/* Mode Selector Tabs */}
-      <div className="px-4 sm:px-6 py-2 bg-stone-950/90 border-b border-stone-800/50 flex items-center justify-between overflow-x-auto scrollbar-none">
+      <div className="shrink-0 px-4 sm:px-6 py-2 bg-stone-950/90 border-b border-stone-800/50 flex items-center justify-between overflow-x-auto scrollbar-none">
         <div className="flex items-center space-x-1.5">
           <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider hidden sm:inline mr-1">
             Focus:
@@ -399,7 +399,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
 
       {/* Error Banner */}
       {error && (
-        <div className="mx-4 sm:mx-6 mt-3 p-3 bg-rose-950/70 border border-rose-800/80 rounded-xl text-xs text-rose-200 flex items-center justify-between animate-in fade-in duration-150 backdrop-blur-md">
+        <div className="shrink-0 mx-4 sm:mx-6 mt-3 p-3 bg-rose-950/70 border border-rose-800/80 rounded-xl text-xs text-rose-200 flex items-center justify-between animate-in fade-in duration-150 backdrop-blur-md">
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
             <span>{error}</span>
@@ -415,7 +415,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       )}
 
       {/* Conversation Stream & Empty State */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 overscroll-contain">
         {entry.messages.length === 0 ? (
           <div className="max-w-2xl mx-auto py-8 text-center space-y-6">
             <div
@@ -552,8 +552,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Composer Box with Quick Mood Selector Pills */}
-      <div className="p-4 sm:px-6 bg-stone-950/85 backdrop-blur-xl border-t border-stone-800/80">
+      {/* Input Composer Box with Quick Mood Selector Pills - Pinned to bottom */}
+      <div className="shrink-0 sticky bottom-0 z-20 w-full p-4 sm:px-6 bg-stone-950/95 backdrop-blur-2xl border-t border-stone-800/80 shadow-2xl">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-2.5">
           {/* Quick Mood Reaction Chips */}
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
