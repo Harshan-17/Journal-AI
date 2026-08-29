@@ -45,6 +45,9 @@ export function createGoogleProvider(): GoogleAuthProvider {
   const provider = new GoogleAuthProvider();
   provider.addScope('profile');
   provider.addScope('email');
+  provider.setCustomParameters({
+    prompt: 'select_account',
+  });
   return provider;
 }
 
