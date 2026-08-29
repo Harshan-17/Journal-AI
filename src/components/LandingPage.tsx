@@ -115,7 +115,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Subtle Brand Badge */}
           <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-stone-900/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-md backdrop-blur-md">
             <Compass className="w-3.5 h-3.5 animate-pulse" />
-            <span>Reflect AI • Mindful Journaling</span>
+            <span>JournalGem • Mindful Journaling</span>
           </div>
 
           {/* Heading & Subheading */}
@@ -209,7 +209,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* Footer */}
       <footer className="relative z-10 text-center text-xs text-stone-400 pb-6">
-        <span>Reflect Journal — Mindful journaling and thinking.</span>
+        <span>JournalGem — Mindful journaling and thinking.</span>
       </footer>
     </div>
   );
