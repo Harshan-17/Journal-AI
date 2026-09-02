@@ -55,7 +55,7 @@ export const AmbientBackground: React.FC = () => {
             className="w-full h-full"
           />
           {/* Subtle dark glass vignette layer to keep typography and controls pristine */}
-          <div className="absolute inset-0 bg-gradient-to-b from-stone-950/75 via-stone-950/60 to-stone-950/80 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/75 via-neutral-950/60 to-neutral-950/80 pointer-events-none" />
           <div className="absolute inset-0 bg-radial-[circle_at_center,transparent_30%,rgba(12,10,9,0.7)_100%] pointer-events-none" />
         </div>
       )}

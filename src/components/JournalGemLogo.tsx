@@ -47,7 +47,7 @@ export const JournalGemIcon: React.FC<{
         viewBox="0 0 32 32"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
-        className={`${svgSizes[size]} relative z-10 text-stone-950 transition-transform duration-300 ${
+        className={`${svgSizes[size]} relative z-10 text-neutral-950 transition-transform duration-300 ${
           animate ? 'group-hover:scale-110 group-hover:rotate-6' : ''
         }`}
       >
@@ -105,7 +105,7 @@ export const JournalGemLogo: React.FC<JournalGemLogoProps> = ({
       {showText && (
         <div className="flex flex-col">
           <div className="flex items-center space-x-1 leading-tight">
-            <span className={`${titleSizes[size]} tracking-tight text-stone-100 font-bold`}>
+            <span className={`${titleSizes[size]} tracking-tight text-neutral-100 font-bold`}>
               Journal
             </span>
             <span
@@ -116,7 +116,7 @@ export const JournalGemLogo: React.FC<JournalGemLogoProps> = ({
           </div>
           {showSubtitle && (
             <span
-              className={`${subtitleSizes[size]} font-mono text-stone-400 block leading-tight tracking-tight`}
+              className={`${subtitleSizes[size]} font-mono text-neutral-400 block leading-tight tracking-tight`}
             >
               Mindful AI Journal
             </span>

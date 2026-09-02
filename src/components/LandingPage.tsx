@@ -62,7 +62,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-3.75rem)] flex flex-col justify-between text-stone-100 overflow-hidden">
+    <div className="relative min-h-[calc(100vh-3.75rem)] flex flex-col justify-between text-neutral-100 overflow-hidden">
       {/* ========================================================================= */}
       {/* 1. FULL-SCREEN INTERACTIVE HALFTONE REVEAL BACKGROUND */}
       {/* ========================================================================= */}
@@ -87,7 +87,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         />
 
         {/* Dynamic dark glass gradient vignette layer to guarantee pristine WCAG AA contrast */}
-        <div className="absolute inset-0 bg-gradient-to-b from-stone-950/85 via-stone-950/65 to-stone-950/90 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/85 via-neutral-950/65 to-neutral-950/90 pointer-events-none" />
         <div className="absolute inset-0 bg-radial-[circle_at_center,transparent_25%,rgba(12,10,9,0.75)_100%] pointer-events-none" />
 
         {/* Ambient atmospheric color bloom */}
@@ -112,21 +112,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center max-w-xl mx-auto w-full px-4 sm:px-6 py-12 sm:py-16">
         <div className="w-full text-center space-y-8">
           {/* Subtle Brand Badge */}
-          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-stone-900/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-md backdrop-blur-md">
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-neutral-900/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-md backdrop-blur-md">
             <Compass className="w-3.5 h-3.5 animate-pulse" />
             <span>JournalGem • Mindful Journaling</span>
           </div>
 
           {/* Heading & Subheading */}
           <div className="space-y-3">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-normal tracking-tight leading-[1.15] text-stone-100">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-normal tracking-tight leading-[1.15] text-neutral-100">
               Unpack your thoughts. <br />
               <span className={`bg-gradient-to-r ${themeConfig.textGradient} bg-clip-text text-transparent font-normal`}>
                 Gain instant clarity.
               </span>
             </h1>
 
-            <p className="text-sm sm:text-base text-stone-300 max-w-md mx-auto leading-relaxed">
+            <p className="text-sm sm:text-base text-neutral-300 max-w-md mx-auto leading-relaxed">
               Write unhurried reflections, brainstorm through challenges, and organize your ideas with an intelligent conversational companion.
             </p>
           </div>
@@ -147,11 +147,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               id="btn-google-signin"
               onClick={handleSignInClick}
               disabled={isLoading}
-              className="w-full inline-flex items-center justify-center space-x-3 px-6 py-4 bg-stone-100 hover:bg-white text-stone-950 font-bold text-sm sm:text-base rounded-2xl shadow-xl transition-all active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+              className="w-full inline-flex items-center justify-center space-x-3 px-6 py-4 bg-neutral-100 hover:bg-white text-neutral-950 font-bold text-sm sm:text-base rounded-2xl shadow-xl transition-all active:scale-[0.98] disabled:opacity-70 cursor-pointer"
             >
               {isLoading ? (
                 <div className="flex items-center space-x-2.5">
-                  <div className="w-4 h-4 border-2 border-stone-900 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
                   <span>Connecting to Google...</span>
                 </div>
               ) : (
@@ -179,35 +179,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               )}
             </button>
 
-            <div className="pt-2 flex items-center justify-center space-x-2 text-xs text-stone-400">
-              <Lock className="w-3.5 h-3.5 text-stone-400" />
+            <div className="pt-2 flex items-center justify-center space-x-2 text-xs text-neutral-400">
+              <Lock className="w-3.5 h-3.5 text-neutral-400" />
               <span>Private session isolation • Encrypted persistence</span>
             </div>
           </div>
 
           {/* Three Clean Trust Highlights */}
-          <div className="grid grid-cols-3 gap-3 pt-6 border-t border-stone-800/60 max-w-md mx-auto text-center">
+          <div className="grid grid-cols-3 gap-3 pt-6 border-t border-neutral-800/60 max-w-md mx-auto text-center">
             <div className="space-y-1">
               <Brain className={`w-4 h-4 mx-auto ${themeConfig.accentText}`} />
-              <p className="text-[11px] font-semibold text-stone-200">Reflective AI</p>
-              <p className="text-[10px] text-stone-400">Multi-turn dialogue</p>
+              <p className="text-[11px] font-semibold text-neutral-200">Reflective AI</p>
+              <p className="text-[10px] text-neutral-400">Multi-turn dialogue</p>
             </div>
             <div className="space-y-1">
               <Shield className={`w-4 h-4 mx-auto ${themeConfig.accentText}`} />
-              <p className="text-[11px] font-semibold text-stone-200">Private & Secure</p>
-              <p className="text-[10px] text-stone-400">Owner-isolated data</p>
+              <p className="text-[11px] font-semibold text-neutral-200">Private & Secure</p>
+              <p className="text-[10px] text-neutral-400">Owner-isolated data</p>
             </div>
             <div className="space-y-1">
               <FileText className={`w-4 h-4 mx-auto ${themeConfig.accentText}`} />
-              <p className="text-[11px] font-semibold text-stone-200">Instant Synthesis</p>
-              <p className="text-[10px] text-stone-400">Clear action roadmaps</p>
+              <p className="text-[11px] font-semibold text-neutral-200">Instant Synthesis</p>
+              <p className="text-[10px] text-neutral-400">Clear action roadmaps</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Footer */}
-      <footer className="relative z-10 text-center text-xs text-stone-400 pb-6">
+      <footer className="relative z-10 text-center text-xs text-neutral-400 pb-6">
         <span>JournalGem — Mindful journaling and thinking.</span>
       </footer>
     </div>

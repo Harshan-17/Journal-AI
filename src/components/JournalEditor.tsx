@@ -1,32 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
   Send,
   Sparkles,
-  Brain,
-  Lightbulb,
-  CheckSquare,
-  FileText,
   Copy,
   Check,
-  Download,
   AlertCircle,
   RefreshCw,
   Clock,
-  MapPin,
-  X,
   Volume2,
   Square,
-  Tag,
-  Flame,
-  Zap,
-  VolumeX,
+  PanelLeftClose,
+  PanelLeftOpen,
+  MapPin,
+  Compass,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { JournalEntry, ReflectionMode, PromptIdea } from '../types';
 import { formatTimestamp } from '../utils/sanitize';
 import { LocationPickerModal } from './LocationPickerModal';
+import { SessionToolsPopover } from './SessionToolsPopover';
+import ParticleText from './ParticleText';
+import { Button as MovingBorderButton } from './ui/moving-border';
 import { useAppTheme } from '../context/ThemeContext';
-import { MOOD_TAGS } from '../utils/theme';
 
 interface JournalEditorProps {
   entry: JournalEntry;
@@ -38,6 +34,9 @@ interface JournalEditorProps {
   error: string | null;
   onRetry: () => void;
   onOpenSummaryModal: () => void;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+  userName?: string;
 }
 
 export const JournalEditor: React.FC<JournalEditorProps> = ({
@@ -50,14 +49,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   error,
   onRetry,
   onOpenSummaryModal,
+  isSidebarOpen = true,
+  onToggleSidebar,
+  userName,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [promptIdeas, setPromptIdeas] = useState<PromptIdea[]>([]);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [isTagInputVisible, setIsTagInputVisible] = useState(false);
-  const [newTagText, setNewTagText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { themeConfig, celebrate } = useAppTheme();
@@ -76,7 +76,61 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     };
   }, []);
 
-  // Fetch prompt ideas
+  const renderComposer = () => (
+    <motion.form 
+      layoutId="composer-form"
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      onSubmit={handleSubmit} 
+      className="max-w-3xl mx-auto w-full space-y-3"
+    >
+      <div className="relative flex items-end bg-black/40 border border-white/20 focus-within:border-white/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all p-3 backdrop-blur-2xl w-full rounded-xl shadow-[0_0_10px_rgba(255,255,255,0.05)]">
+        <textarea
+          autoFocus
+          id="input-journal-message"
+          ref={textareaRef}
+          rows={1}
+          value={inputText}
+          onChange={(e) => {
+            setInputText(e.target.value);
+            e.target.style.height = 'auto';
+            e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="What are you contemplating right now?..."
+          disabled={isGenerating}
+          className="flex-1 bg-transparent px-3 py-2 text-[15px] text-white placeholder-neutral-600 resize-none focus:outline-none max-h-40 min-h-[48px] leading-relaxed font-serif"
+        />
+
+        <button
+          id="btn-send-message"
+          type="submit"
+          disabled={!inputText.trim() || isGenerating}
+          className={`p-3 ${themeConfig.accentBg} rounded-none shadow-xl disabled:opacity-20 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer active:scale-95 ml-2`}
+          title="Send message [Enter]"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] text-neutral-600 px-2 uppercase tracking-widest font-mono">
+        <span>
+          <kbd className="px-1 border border-neutral-700 text-neutral-400">Enter</kbd> send, <kbd className="px-1 border border-neutral-700 text-neutral-400">Shift+Enter</kbd> newline
+        </span>
+        <span>{inputText.length} chars</span>
+      </div>
+    </motion.form>
+  );
+
+
+
+  // Auto-focus the input on mount
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, []);
+
+  // Fetch prompt ideas for welcome state
   useEffect(() => {
     const fetchPrompts = async () => {
       try {
@@ -138,23 +192,6 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleAddTag = (tagToAdd: string) => {
-    const trimmed = tagToAdd.trim().replace(/^#/, '');
-    if (!trimmed) return;
-    const currentTags = entry.tags || [];
-    if (!currentTags.includes(trimmed)) {
-      onUpdateEntry({ tags: [...currentTags, trimmed] });
-      celebrate(25);
-    }
-    setNewTagText('');
-    setIsTagInputVisible(false);
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    const currentTags = entry.tags || [];
-    onUpdateEntry({ tags: currentTags.filter((t) => t !== tagToRemove) });
-  };
-
   const handleExportTranscript = () => {
     let transcript = `# ${entry.title || 'Journal Reflection'}\n`;
     transcript += `Date: ${formatTimestamp(entry.createdAt)}\n`;
@@ -185,228 +222,85 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     celebrate(35);
   };
 
-  const modes: { id: ReflectionMode; label: string; icon: any; desc: string; gradient: string }[] = [
-    { id: 'reflect', label: 'Perspective', icon: Brain, desc: 'Deep clarity & cognitive reframing', gradient: 'from-violet-500 to-indigo-500' },
-    { id: 'brainstorm', label: 'Brainstorm', icon: Lightbulb, desc: 'Creative ideas & multi-angle thinking', gradient: 'from-cyan-400 to-teal-400' },
-    { id: 'actionable', label: 'Action Items', icon: CheckSquare, desc: 'Concrete execution & checklists', gradient: 'from-emerald-400 to-green-500' },
-    { id: 'summarize', label: 'Synthesis', icon: FileText, desc: 'Core takeaways & structured overview', gradient: 'from-fuchsia-500 to-pink-500' },
-  ];
-
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 w-full bg-stone-950/60 backdrop-blur-md text-stone-100 overflow-hidden relative z-10">
-      {/* Top Header / Metadata Bar */}
-      <div className="shrink-0 p-4 sm:px-6 border-b border-stone-800/80 bg-stone-950/85 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Title & Metadata Editor */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <input
-            id="input-entry-title"
-            type="text"
-            value={entry.title}
-            onChange={(e) => onUpdateEntry({ title: e.target.value })}
-            placeholder="Name your reflection session..."
-            className="w-full bg-transparent font-serif text-lg sm:text-xl text-stone-100 placeholder-stone-400 focus:outline-none pb-0.5 transition-colors"
-          />
-          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-400">
-            <span className="flex items-center space-x-1">
-              <Clock className="w-3 h-3" />
-              <span>{formatTimestamp(entry.createdAt)}</span>
-            </span>
+    <div className="flex-1 flex flex-col h-full min-h-0 w-full bg-black backdrop-blur-md text-white overflow-hidden relative z-10">
+      {/* Streamlined Minimalist Header Bar */}
+      <div className="shrink-0 px-4 sm:px-8 py-3.5 border-b border-white/10 bg-black/80 backdrop-blur-xl flex items-center justify-between gap-4 relative z-40">
+        {/* Left: Sidebar Toggle & Clean Inline Title */}
+        <div className="flex-1 min-w-0 flex items-center space-x-3">
+          {onToggleSidebar && (
+            <button
+              id="btn-journal-toggle-sidebar"
+              onClick={onToggleSidebar}
+              className={`p-1.5 rounded-none border transition-all duration-150 active:scale-95 cursor-pointer shrink-0 ${
+                !isSidebarOpen
+                  ? 'bg-white/5 border-white/20 text-white hover:bg-white/10'
+                  : 'bg-transparent border-transparent text-neutral-400 hover:text-white hover:bg-white/5'
+              }`}
+              title="Toggle sidebar [Ctrl+B]"
+              aria-label="Toggle sidebar"
+            >
+              {isSidebarOpen ? (
+                <PanelLeftClose className="w-4 h-4" />
+              ) : (
+                <PanelLeftOpen className="w-4 h-4" />
+              )}
+            </button>
+          )}
 
-            {/* Tags Pills */}
-            {entry.tags && entry.tags.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {entry.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-lg bg-stone-900/90 border border-stone-800 text-[11px] font-mono text-stone-300 shadow-xs"
-                  >
-                    <span>#{tag}</span>
-                    <button
-                      onClick={() => handleRemoveTag(tag)}
-                      className="text-stone-400 hover:text-rose-400 transition-colors cursor-pointer"
-                      title="Remove tag"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Add Tag Trigger */}
-            {isTagInputVisible ? (
-              <div className="inline-flex items-center space-x-1">
-                <input
-                  type="text"
-                  value={newTagText}
-                  onChange={(e) => setNewTagText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag(newTagText);
-                    } else if (e.key === 'Escape') {
-                      setIsTagInputVisible(false);
-                    }
-                  }}
-                  placeholder="tag..."
-                  autoFocus
-                  className="bg-stone-900 border border-cyan-500/50 rounded-md px-2 py-0.5 text-[11px] text-stone-200 focus:outline-none w-24"
-                />
-                <button
-                  onClick={() => handleAddTag(newTagText)}
-                  className={`${themeConfig.accentText} font-bold text-[11px] cursor-pointer`}
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => setIsTagInputVisible(false)}
-                  className="text-stone-400 hover:text-stone-200 cursor-pointer"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setIsTagInputVisible(true)}
-                className="inline-flex items-center space-x-1 text-[11px] text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
-                title="Add a tag to this reflection"
-              >
-                <Tag className="w-2.5 h-2.5" />
-                <span>+ Tag</span>
-              </button>
-            )}
+          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+            <input
+              id="input-entry-title"
+              type="text"
+              value={entry.title}
+              onChange={(e) => onUpdateEntry({ title: e.target.value })}
+              placeholder="Untitled Reflection..."
+              className="bg-transparent font-serif text-base sm:text-lg text-white placeholder-neutral-600 focus:outline-none focus:text-white transition-colors truncate max-w-sm sm:max-w-md w-full"
+            />
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center space-x-2 shrink-0 flex-wrap gap-y-2">
-          {/* Location Pin Pill / Action */}
-          {entry.location ? (
-            <div className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/40 border border-cyan-800/50 rounded-xl transition-all group backdrop-blur-md">
-              <button
-                id="btn-edit-location"
-                type="button"
-                onClick={() => setIsLocationModalOpen(true)}
-                className="flex items-center space-x-1.5 min-w-0 cursor-pointer"
-                title="View or change pinned location on map"
-              >
-                <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="truncate max-w-[130px] sm:max-w-[170px]">
-                  {entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
-                </span>
-              </button>
-              <button
-                id="btn-remove-location-quick"
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUpdateEntry({ location: undefined });
-                }}
-                className="text-stone-400 hover:text-rose-400 p-0.5 rounded transition-colors ml-1 cursor-pointer"
-                title="Remove location"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <button
-              id="btn-pin-location"
-              type="button"
-              onClick={() => setIsLocationModalOpen(true)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-stone-300 hover:text-white bg-stone-900/80 hover:bg-stone-850 border border-stone-800 rounded-xl transition-all active:scale-95 cursor-pointer backdrop-blur-md"
-              title="Pin a place or memory"
-            >
-              <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Pin Place</span>
-            </button>
-          )}
-
-          {entry.summary ? (
-            <button
-              id="btn-view-summary"
-              onClick={onOpenSummaryModal}
-              className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-fuchsia-300 bg-fuchsia-950/40 hover:bg-fuchsia-900/40 border border-fuchsia-800/50 rounded-xl transition-all active:scale-95 cursor-pointer backdrop-blur-md"
-            >
-              <FileText className="w-3.5 h-3.5 text-fuchsia-400" />
-              <span>Summary</span>
-            </button>
-          ) : (
-            <button
-              id="btn-generate-summary"
-              disabled={entry.messages.length < 2 || isSummarizing}
-              onClick={async () => {
-                await onGenerateSummary();
-                celebrate(40);
-              }}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold ${themeConfig.accentBg} disabled:opacity-40 rounded-xl transition-all active:scale-95 cursor-pointer shadow-md`}
-              title={entry.messages.length < 2 ? 'Write at least 1 turn to generate a summary' : 'Synthesize reflection into insights'}
-            >
-              {isSummarizing ? (
-                <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Sparkles className="w-3.5 h-3.5 fill-current" />
-              )}
-              <span>{isSummarizing ? 'Synthesizing...' : 'Summarize'}</span>
-            </button>
-          )}
+        {/* Right: Discreet Pinned Tag & All-in-One Options Popover */}
+        <div className="flex items-center space-x-2.5 shrink-0">
+          <span className="hidden sm:flex text-[11px] text-neutral-500 items-center space-x-1 shrink-0 uppercase tracking-widest font-mono mr-2">
+            <Clock className="w-3 h-3 opacity-70" />
+            <span>{formatTimestamp(entry.createdAt)}</span>
+          </span>
 
           <button
-            id="btn-export-transcript"
-            onClick={handleExportTranscript}
-            disabled={entry.messages.length === 0}
-            className="p-2 text-stone-400 hover:text-white hover:bg-stone-900 border border-transparent hover:border-stone-800 rounded-xl transition-all disabled:opacity-40 active:scale-95 cursor-pointer"
-            title="Export as Markdown"
+            onClick={() => setIsLocationModalOpen(true)}
+            className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-none border border-white/20 text-white text-xs hover:bg-white/10 transition-colors cursor-pointer"
+            title={entry.location ? (entry.location.formattedAddress || 'Pinned Location') : 'Pin a place'}
           >
-            <Download className="w-4 h-4" />
+            <MapPin className={`w-3 h-3 ${entry.location ? 'text-cyan-400' : 'text-neutral-400'}`} />
+            <span className="truncate max-w-[120px] font-medium text-[11px] uppercase tracking-wider">
+              {entry.location ? (entry.location.name || 'Pinned') : 'Pin Place'}
+            </span>
           </button>
+
+          {/* Clean Tools & Options Popover */}
+          <SessionToolsPopover
+            entry={entry}
+            onUpdateEntry={onUpdateEntry}
+            onOpenLocationModal={() => setIsLocationModalOpen(true)}
+            onOpenSummaryModal={onOpenSummaryModal}
+            onGenerateSummary={onGenerateSummary}
+            isSummarizing={isSummarizing}
+            onExportTranscript={handleExportTranscript}
+          />
         </div>
       </div>
 
-      {/* Mode Selector Tabs */}
-      <div className="shrink-0 px-4 sm:px-6 py-2 bg-stone-950/90 border-b border-stone-800/50 flex items-center justify-between overflow-x-auto scrollbar-none">
-        <div className="flex items-center space-x-1.5">
-          <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider hidden sm:inline mr-1">
-            Focus:
-          </span>
-          {modes.map((m) => {
-            const Icon = m.icon;
-            const isActive = entry.mode === m.id;
-            return (
-              <button
-                key={m.id}
-                id={`btn-mode-${m.id}`}
-                onClick={() => {
-                  onUpdateEntry({ mode: m.id });
-                }}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  isActive
-                    ? `${themeConfig.accentBorder} ${themeConfig.accentText} bg-stone-900/90 shadow-xs border ring-1 ring-white/10`
-                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/60'
-                }`}
-                title={m.desc}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{m.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <span className="text-[11px] text-stone-400 hidden lg:inline font-mono">
-          {modes.find((m) => m.id === entry.mode)?.desc}
-        </span>
-      </div>
-
-      {/* Error Banner */}
+      {/* Error Notice */}
       {error && (
-        <div className="shrink-0 mx-4 sm:mx-6 mt-3 p-3 bg-rose-950/70 border border-rose-800/80 rounded-xl text-xs text-rose-200 flex items-center justify-between animate-in fade-in duration-150 backdrop-blur-md">
+        <div className="shrink-0 mx-4 sm:mx-8 mt-3 p-3 bg-red-950/40 border border-red-500/50 rounded-none text-xs text-red-200 flex items-center justify-between animate-in fade-in duration-150 backdrop-blur-md">
           <div className="flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
             <span>{error}</span>
           </div>
           <button
             onClick={onRetry}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-rose-900 hover:bg-rose-800 text-rose-100 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-red-900 hover:bg-red-800 text-white rounded-none border border-red-500/50 text-[11px] font-semibold transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3 h-3" />
             <span>Retry</span>
@@ -414,42 +308,57 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         </div>
       )}
 
-      {/* Conversation Stream & Empty State */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6 space-y-6 overscroll-contain">
+      {/* Main Conversation Stream */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 py-8 overscroll-contain">
         {entry.messages.length === 0 ? (
-          <div className="max-w-2xl mx-auto py-8 text-center space-y-6">
-            <div
-              className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${themeConfig.primaryGradient} flex items-center justify-center text-stone-950 shadow-xl mx-auto animate-pulse`}
-            >
-              <Sparkles className="w-6 h-6 fill-stone-950/20" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className={`text-2xl font-serif font-normal bg-gradient-to-r ${themeConfig.textGradient} bg-clip-text text-transparent`}>
-                What would you like to explore today?
-              </h3>
-              <p className="text-sm text-stone-400 max-w-md mx-auto leading-relaxed">
-                Write freely, explore a problem, or capture a sudden insight. The assistant will offer questions, perspective, and structured clarity.
+          /* Empty / Welcome State with MovingBorder Component */
+          <div className="max-w-2xl mx-auto py-12 text-center space-y-12 animate-in fade-in duration-300">
+            <div className="space-y-4">
+              <div style={{ width: '100%', height: 180, display: 'flex', justifyContent: 'center' }}>
+                <ParticleText
+                  text={`hello${userName ? `, ${userName}` : '.'}`.toLowerCase()}
+                  particleSize={2}
+                  density={4}
+                  color="#ffffff"
+                  highlightColor="#ffffff"
+                  scatter={180}
+                  gatherDuration={1200}
+                  stagger={200}
+                  trigger="mount"
+                  fontSize="clamp(2.5rem, 8vw, 4rem)"
+                  fontWeight={300}
+                  fontFamily="Inter, sans-serif"
+                  glow={false}
+                />
+              </div>
+              <p className="text-sm sm:text-base text-neutral-400 max-w-md mx-auto leading-relaxed font-sans font-light">
+                How are you feeling today? Explore an intuition, unpack a complex decision, or reflect on your day to start a conversation.
               </p>
             </div>
 
-            {/* Quick Inspiration Prompts with colorful hover borders */}
+            
+            {/* Input Composer in Center */}
+            <div className="flex justify-center w-full px-4">
+              {renderComposer()}
+            </div>
+
+
+            {/* Subtle Inspiration Sparks */}
             {promptIdeas.length > 0 && (
-              <div className="pt-2 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                  Or begin with a spark:
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto text-left">
-                  {promptIdeas.slice(0, 4).map((idea) => (
+              <div className="pt-12 flex flex-col items-center gap-4 max-w-2xl mx-auto text-center">
+                <span className="text-xs uppercase tracking-widest text-neutral-600 font-semibold mb-2">Or start with</span>
+                <div className="flex flex-col gap-3 w-full">
+                  {promptIdeas.slice(0, 3).map((idea) => (
                     <button
                       key={idea.id}
-                      onClick={() => setInputText(idea.text)}
-                      className={`p-3.5 rounded-2xl bg-stone-900/60 border border-stone-800/80 hover:${themeConfig.accentBorder} hover:bg-stone-900/90 text-left transition-all group cursor-pointer active:scale-[0.98] backdrop-blur-md`}
+                      onClick={() => {
+                        setInputText(idea.text);
+                        textareaRef.current?.focus();
+                      }}
+                      className="group flex items-center justify-center space-x-3 text-neutral-500 hover:text-white transition-colors cursor-pointer"
                     >
-                      <span className={`font-bold text-xs ${themeConfig.accentText} block mb-1`}>
-                        {idea.title}
-                      </span>
-                      <span className="text-stone-300 text-xs line-clamp-2 leading-relaxed">
+                      <Sparkles className="w-3.5 h-3.5 opacity-50 group-hover:opacity-100 transition-opacity" />
+                      <span className="font-sans text-sm leading-relaxed text-center">
                         {idea.text}
                       </span>
                     </button>
@@ -459,165 +368,129 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             )}
           </div>
         ) : (
-          entry.messages.map((msg) => {
-            const isUser = msg.role === 'user';
-            const isCopied = copiedId === msg.id;
-            const isSpeaking = speakingMessageId === msg.id;
+          /* Stream of Messages */
+          <div className="max-w-3xl mx-auto w-full space-y-12">
+            {entry.messages.map((msg) => {
+              const isUser = msg.role === 'user';
+              const isCopied = copiedId === msg.id;
+              const isSpeaking = speakingMessageId === msg.id;
 
-            return (
-              <div
-                key={msg.id}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-3xl ${
-                  isUser ? 'ml-auto' : 'mr-auto'
-                }`}
-              >
-                {/* Sender tag & timestamp */}
-                <div className="flex items-center space-x-2 text-[11px] text-stone-400 mb-1 px-1">
-                  <span className="font-semibold text-stone-300">
-                    {isUser ? 'You' : 'Reflect AI'}
-                  </span>
-                  <span>•</span>
-                  <span>{msg.timestamp}</span>
-                </div>
-
-                {/* Message Box */}
+              return (
                 <div
-                  className={`group relative p-4 sm:p-5 rounded-2xl text-sm leading-relaxed ${
-                    isUser
-                      ? `${themeConfig.bubbleUser} rounded-br-xs shadow-md`
-                      : `${themeConfig.bubbleAi} rounded-bl-xs shadow-md`
-                  }`}
+                  key={msg.id}
+                  className={`flex flex-col w-full group ${isUser ? "items-end" : "items-start"}`}
                 >
+                  {/* Sender & Timestamp */}
+                  <div className={`flex items-center space-x-1.5 text-[10px] text-neutral-500 mb-2 px-1 uppercase tracking-widest font-mono ${isUser ? "flex-row-reverse space-x-reverse" : ""}`}>
+                    <span className="font-bold text-neutral-400">
+                      {isUser ? 'You' : 'Reflect AI'}
+                    </span>
+                    <span className="opacity-50">•</span>
+                    <span className="bg-white/10 text-white px-2 py-0.5 rounded-md font-bold tracking-wider shadow-[0_0_8px_rgba(255,255,255,0.1)]">{msg.timestamp}</span>
+                  </div>
+
+                  {/* Message Body */}
                   {isUser ? (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    /* User Message: Uses Dynamic Theme Config */
+                    <div className="relative max-w-[85%] px-5 py-4 bg-gray-900/60 backdrop-blur-md border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)] rounded-2xl rounded-tr-sm text-[14px] leading-relaxed">
+                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+
+                      <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          className="p-1 text-white/50 hover:text-white transition-colors cursor-pointer"
+                          title="Copy text"
+                        >
+                          {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="prose prose-invert max-w-none text-stone-200 prose-headings:text-stone-100 prose-p:text-stone-200 prose-li:text-stone-200 prose-strong:text-cyan-300 prose-code:text-cyan-300 prose-pre:bg-stone-950 prose-pre:border prose-pre:border-stone-800">
-                      <Markdown>{msg.content}</Markdown>
+                    /* AI Message: Pure Editorial Typography */
+                    <div className="relative w-full px-6 py-5 bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-2xl text-[14px] sm:text-[15px] leading-loose shadow-sm">
+                      <div className="prose prose-invert prose-neutral max-w-none prose-p:my-4 prose-p:leading-loose prose-p:font-light prose-headings:my-4 prose-headings:text-white prose-headings:font-serif prose-headings:font-medium prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-li:my-1 prose-ul:my-4 prose-ol:my-4 prose-strong:text-white prose-strong:font-semibold prose-code:text-white prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:border prose-code:border-white/20 prose-code:font-mono prose-pre:my-4 prose-pre:p-4 prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/20 prose-pre:rounded-none">
+                        <Markdown>{msg.content}</Markdown>
+                      </div>
+
+                      {/* Action buttons (Copy & Speech) on Hover */}
+                      <div className="flex items-center space-x-3 mt-4 pt-2 opacity-0 group-hover:opacity-100 transition-opacity text-neutral-500 text-xs font-mono uppercase tracking-wider">
+                        <button
+                          onClick={() => handleToggleSpeak(msg.id, msg.content)}
+                          className={`flex items-center space-x-1.5 hover:text-white transition-colors cursor-pointer ${
+                            isSpeaking ? 'text-white' : 'hover:text-white'
+                          }`}
+                          title={isSpeaking ? 'Stop speech' : 'Read aloud'}
+                        >
+                          {isSpeaking ? (
+                            <>
+                              <Square className="w-3 h-3 text-white fill-white animate-pulse" />
+                              <span>Speaking</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="w-3 h-3" />
+                              <span>Listen</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={() => handleCopyMessage(msg.id, msg.content)}
+                          className="flex items-center space-x-1.5 hover:text-white transition-colors cursor-pointer"
+                          title="Copy message"
+                        >
+                          {isCopied ? (
+                            <>
+                              <Check className="w-3 h-3 text-white" />
+                              <span className="text-white">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
+                </div>
+              );
+            })}
 
-                  {/* Interactive Message Actions (Copy & Text-to-Speech) */}
-                  <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {!isUser && (
-                      <button
-                        onClick={() => handleToggleSpeak(msg.id, msg.content)}
-                        className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                          isSpeaking
-                            ? 'bg-cyan-500/20 text-cyan-300'
-                            : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-                        }`}
-                        title={isSpeaking ? 'Stop reading' : 'Read aloud'}
-                      >
-                        {isSpeaking ? <Square className="w-3.5 h-3.5 text-cyan-400 fill-cyan-400 animate-pulse" /> : <Volume2 className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => handleCopyMessage(msg.id, msg.content)}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        isUser
-                          ? 'text-stone-900 hover:bg-black/10'
-                          : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-                      }`}
-                      title="Copy message"
-                    >
-                      {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+            {/* Generating Thought Indicator */}
+            {isGenerating && (
+              <div className="flex flex-col items-start w-full animate-in fade-in duration-200 pt-4">
+                <div className="flex items-center space-x-1.5 text-[10px] text-neutral-500 mb-2 px-1 uppercase tracking-widest font-mono">
+                  <span className="font-bold text-neutral-400">Reflect AI</span>
+                  <span>•</span>
+                  <span>Thinking</span>
+                </div>
+                <div className="flex items-center space-x-3 py-2 text-white text-xs">
+                  <div className="flex space-x-1.5">
+                    <span className="w-1.5 h-1.5 bg-white animate-pulse" />
+                    <span className="w-1.5 h-1.5 bg-white/60 animate-pulse [animation-delay:-0.15s]" />
+                    <span className="w-1.5 h-1.5 bg-white/30 animate-pulse [animation-delay:-0.3s]" />
                   </div>
+                  <span className="font-mono uppercase tracking-widest text-[10px] text-neutral-500">Drafting</span>
                 </div>
               </div>
-            );
-          })
-        )}
-
-        {/* Streaming / Generation state bubble with animated gradient glowing wave */}
-        {isGenerating && (
-          <div className="flex flex-col items-start max-w-3xl mr-auto animate-in fade-in duration-200">
-            <div className="flex items-center space-x-2 text-[11px] text-stone-400 mb-1 px-1">
-              <span className="font-bold text-stone-300">Reflect AI</span>
-              <span>•</span>
-              <span className={`${themeConfig.accentText} animate-pulse font-mono`}>Generating insights...</span>
-            </div>
-            <div className={`bg-stone-900/90 border ${themeConfig.accentBorder} p-4 rounded-2xl rounded-bl-xs text-sm text-stone-200 flex items-center space-x-3 shadow-lg backdrop-blur-md`}>
-              <div className="flex space-x-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-2.5 h-2.5 rounded-full bg-fuchsia-400 animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-bounce" />
-              </div>
-              <span className="text-xs text-stone-300 font-medium">Reframing perspective...</span>
-            </div>
+            )}
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Composer Box with Quick Mood Selector Pills - Pinned to bottom */}
-      <div className="shrink-0 sticky bottom-0 z-20 w-full p-4 sm:px-6 bg-stone-950/95 backdrop-blur-2xl border-t border-stone-800/80 shadow-2xl">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-2.5">
-          {/* Quick Mood Reaction Chips */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
-            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider shrink-0 mr-1">
-              Mood:
-            </span>
-            {MOOD_TAGS.map((mood) => {
-              const hasTag = entry.tags?.includes(mood.id);
-              return (
-                <button
-                  key={mood.id}
-                  type="button"
-                  onClick={() => {
-                    if (hasTag) {
-                      handleRemoveTag(mood.id);
-                    } else {
-                      handleAddTag(mood.id);
-                    }
-                  }}
-                  className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer active:scale-95 whitespace-nowrap ${
-                    hasTag
-                      ? `bg-gradient-to-r ${mood.color} text-stone-950 shadow-xs font-bold`
-                      : 'bg-stone-900/80 hover:bg-stone-850 text-stone-300 border border-stone-800/80 hover:border-stone-700'
-                  }`}
-                >
-                  <span>{mood.emoji}</span>
-                  <span>{mood.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className={`relative flex items-end rounded-2xl bg-stone-900/90 border border-stone-800 focus-within:${themeConfig.accentBorder} focus-within:ring-1 focus-within:ring-white/10 transition-all p-2 shadow-inner backdrop-blur-md`}>
-            <textarea
-              id="input-journal-message"
-              ref={textareaRef}
-              rows={2}
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your reflection, question, or thought (Shift+Enter for newline)..."
-              disabled={isGenerating}
-              className="flex-1 bg-transparent px-3 py-2 text-sm text-stone-100 placeholder-stone-400 resize-none focus:outline-none max-h-40 min-h-[52px] leading-relaxed"
-            />
-
-            <button
-              id="btn-send-message"
-              type="submit"
-              disabled={!inputText.trim() || isGenerating}
-              className={`p-3 ${themeConfig.accentBg} font-bold rounded-xl shadow-md disabled:opacity-30 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer active:scale-95`}
-              title="Send to assistant"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between text-[11px] text-stone-400 px-2">
-            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-300 font-mono text-[10px]">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-300 font-mono text-[10px]">Shift+Enter</kbd> for newline</span>
-            <span className="font-mono">{inputText.length} chars</span>
-          </div>
-        </form>
-      </div>
-
-      {/* Location Picker Modal */}
+      
+      {/* Floating Minimalist Input Composer */}
+      {entry.messages.length > 0 && (
+        <div className="shrink-0 sticky bottom-0 z-20 w-full px-4 sm:px-8 pb-6 pt-4 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-auto">
+          {renderComposer()}
+        </div>
+      )}
+      
+{/* Location Picker Modal */}
       <LocationPickerModal
         isOpen={isLocationModalOpen}
         onClose={() => setIsLocationModalOpen(false)}
@@ -630,5 +503,3 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     </div>
   );
 };
-
-

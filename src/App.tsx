@@ -23,6 +23,7 @@ import { JournalEditor } from './components/JournalEditor';
 import { SecurityBadgeModal } from './components/SecurityBadgeModal';
 import { SummaryModal } from './components/SummaryModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
+import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { EntriesMapViewModal } from './components/EntriesMapViewModal';
 import { AmbientBackground } from './components/AmbientBackground';
 import { JournalEntry, JournalMessage, ReflectionMode, UserProfile } from './types';
@@ -30,6 +31,8 @@ import { sanitizePayload, formatTimestamp, isValidCoordinate } from './utils/san
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isEntriesLoading, setIsEntriesLoading] = useState(false);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -44,11 +47,24 @@ export default function App() {
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [isFirebaseConfigModalOpen, setIsFirebaseConfigModalOpen] = useState(false);
   const [isMapViewOpen, setIsMapViewOpen] = useState(false);
-  const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Keyboard shortcut (Ctrl+B / Cmd+B) to toggle Focus Mode / Sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is inside an input/textarea and pressing other shortcuts
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsSidebarOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 1. Listen for Authentication state changes (Firebase Auth)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser({
           uid: currentUser.uid,
@@ -58,8 +74,16 @@ export default function App() {
             (currentUser.isAnonymous ? 'Guest Explorer (Private)' : 'Authenticated User'),
           photoURL: currentUser.photoURL,
         });
+
+        try {
+          const idTokenResult = await currentUser.getIdTokenResult(true);
+          setIsAdmin(!!idTokenResult.claims.admin || currentUser.email === 'harshan1339a@gmail.com');
+        } catch (err) {
+          setIsAdmin(currentUser.email === 'harshan1339a@gmail.com');
+        }
       } else {
         setUser(null);
+        setIsAdmin(false);
         setEntries([]);
         setSelectedEntryId(null);
       }
@@ -125,7 +149,7 @@ export default function App() {
             loadedEntries.push({
               id: docSnap.id,
               userId: user.uid,
-              title: data.title || 'Untitled Reflection',
+              title: data.title !== undefined ? data.title : 'Untitled Reflection',
               mode: data.mode || 'reflect',
               messages: Array.isArray(data.messages) ? data.messages : [],
               tags: Array.isArray(data.tags) ? data.tags : [],
@@ -147,13 +171,10 @@ export default function App() {
 
           setEntries(loadedEntries);
 
-          // Select first entry if current selection is invalid or null
+          // Preserve current selection if valid, otherwise leave it as null (new entry)
           setSelectedEntryId((prevId) => {
             if (prevId && loadedEntries.some((e) => e.id === prevId)) {
               return prevId;
-            }
-            if (loadedEntries.length > 0) {
-              return loadedEntries[0].id;
             }
             return null;
           });
@@ -243,6 +264,7 @@ export default function App() {
     // Optimistically select and persist
     setEntries((prev) => [newEntry, ...prev]);
     setSelectedEntryId(newEntry.id);
+    setIsSidebarOpen(false); // Collapse the sidebar on new reflection
 
     try {
       await persistEntry(newEntry);
@@ -253,18 +275,41 @@ export default function App() {
 
   // Update current entry fields (e.g. title, mode)
   const handleUpdateEntry = async (updatedFields: Partial<JournalEntry>) => {
-    if (!currentEntry) return;
-    const updated = {
-      ...currentEntry,
-      ...updatedFields,
-      updatedAt: Date.now(),
-    };
+    let targetId = selectedEntryId;
 
-    setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-    try {
-      await persistEntry(updated);
-    } catch (err) {
-      console.error('Update save failed:', err);
+    if (!targetId) {
+      const newEntry = createNewEmptyEntry(user ? user.uid : 'anonymous');
+      const updated = { ...newEntry, ...updatedFields, updatedAt: Date.now() };
+      setEntries((prev) => [updated, ...prev]);
+      setSelectedEntryId(updated.id);
+      try {
+        await persistEntry(updated);
+      } catch (err) {
+        console.error('Initial update save failed:', err);
+      }
+      return;
+    }
+
+    let updatedEntry: JournalEntry | null = null;
+    
+    setEntries((prev) => prev.map((e) => {
+      if (e.id === targetId) {
+        updatedEntry = {
+          ...e,
+          ...updatedFields,
+          updatedAt: Date.now(),
+        };
+        return updatedEntry;
+      }
+      return e;
+    }));
+
+    if (updatedEntry) {
+      try {
+        await persistEntry(updatedEntry);
+      } catch (err) {
+        console.error('Update save failed:', err);
+      }
     }
   };
 
@@ -325,10 +370,11 @@ export default function App() {
       timestamp: formatTimestamp(now),
     };
 
-    // Auto-derive a meaningful title if it's the first message and title is default
+    // Auto-derive a meaningful title if the title is default or cleared
     let newTitle = targetEntry.title;
-    if (targetEntry.messages.length === 0 && (targetEntry.title === 'New Reflection' || !targetEntry.title)) {
-      newTitle = userText.slice(0, 42).trim() + (userText.length > 42 ? '...' : '');
+    const needsTitleUpdate = targetEntry.title === 'New Reflection' || targetEntry.title === 'Untitled Reflection' || !targetEntry.title || targetEntry.title === 'Analyzing topic...';
+    if (needsTitleUpdate) {
+      newTitle = 'Analyzing topic...';
     }
 
     const entryWithUserMsg: JournalEntry = {
@@ -348,6 +394,21 @@ export default function App() {
       await persistEntry(entryWithUserMsg);
     } catch (saveErr) {
       console.warn('Initial turn save notice:', saveErr);
+    }
+
+    // Start generating title concurrently if it needs an update
+    let titlePromise: Promise<string | null> = Promise.resolve(null);
+    if (needsTitleUpdate) {
+      // Send the entire conversation history to get a better topic
+      const conversationContext = entryWithUserMsg.messages.map(m => m.role + ': ' + m.content).join('\n');
+      titlePromise = fetch('/api/gemini/title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: conversationContext }),
+      })
+        .then((r) => r.json())
+        .then((d) => d.title || null)
+        .catch(() => null);
     }
 
     // Call Backend Gemini Server Proxy (/api/gemini/chat)
@@ -380,8 +441,10 @@ export default function App() {
         modelUsed: data.modelUsed,
       };
 
+      const generatedTitle = await titlePromise;
       const finalEntry: JournalEntry = {
         ...entryWithUserMsg,
+        title: generatedTitle || entryWithUserMsg.title,
         messages: [...entryWithUserMsg.messages, assistantMessage],
         updatedAt: assistantNow,
       };
@@ -408,7 +471,11 @@ export default function App() {
       ).catch((logErr) => console.warn('Interaction logging notice:', logErr));
     } catch (geminiErr: any) {
       console.error('Gemini interaction error:', geminiErr);
-      setError(geminiErr.message || 'Gemini was unable to respond. Please retry.');
+      if (geminiErr.message === 'Failed to fetch') {
+        setError('The connection to the AI server was lost (the server was updating). Please retry your message.');
+      } else {
+        setError(geminiErr.message || 'Gemini was unable to respond. Please retry.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -469,9 +536,9 @@ export default function App() {
   // Loading spinner during initial Firebase Auth state verification
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center space-y-4 text-stone-100">
-        <div className="w-10 h-10 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-medium text-stone-400">Verifying secure Firebase session...</p>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-4 text-white">
+        <div className="w-10 h-10 border-3 border-white border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-medium text-neutral-400">Verifying secure Firebase session...</p>
       </div>
     );
   }
@@ -479,13 +546,15 @@ export default function App() {
   // Unauthenticated Landing Page
   if (!user) {
     return (
-      <div className="min-h-screen bg-stone-950 flex flex-col font-sans relative overflow-hidden">
+      <div className="min-h-screen bg-black flex flex-col font-sans relative overflow-hidden">
         <AmbientBackground />
         <Navbar
           user={null}
           onSignOut={handleSignOut}
           onNewEntry={() => {}}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => setIsAdminDashboardOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
           saveStatus="saved"
         />
@@ -503,7 +572,12 @@ export default function App() {
           isOpen={isSecurityModalOpen}
           onClose={() => setIsSecurityModalOpen(false)}
         />
-        <FirebaseConfigModal
+        <AdminDashboardModal
+        isOpen={isAdminDashboardOpen}
+        onClose={() => setIsAdminDashboardOpen(false)}
+      />
+
+      <FirebaseConfigModal
           isOpen={isFirebaseConfigModalOpen}
           onClose={() => setIsFirebaseConfigModalOpen(false)}
         />
@@ -514,33 +588,31 @@ export default function App() {
   // Loading indicator while initial user entries are fetching from Cloud Firestore
   if (isEntriesLoading && entries.length === 0) {
     return (
-      <div className="min-h-screen bg-stone-950 flex flex-col font-sans text-stone-100 relative overflow-hidden">
+      <div className="min-h-screen bg-black flex flex-col font-sans text-white relative overflow-hidden">
         <AmbientBackground />
         <Navbar
           user={user}
           onSignOut={handleSignOut}
           onNewEntry={() => {}}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => setIsAdminDashboardOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
           saveStatus="saving"
         />
         <div className="flex-1 flex flex-col items-center justify-center space-y-4 relative z-10">
-          <div className="w-8 h-8 border-3 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-stone-400">Retrieving your private reflections from Firestore...</p>
+          <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-neutral-400">Retrieving your private reflections from Firestore...</p>
         </div>
       </div>
     );
   }
 
   // Active or Fallback empty entry for dashboard view
-  const activeEntry: JournalEntry =
-    currentEntry ||
-    (entries.length > 0
-      ? entries[0]
-      : createNewEmptyEntry(user.uid));
+  const activeEntry: JournalEntry = currentEntry || createNewEmptyEntry(user.uid);
 
   return (
-    <div className="h-screen max-h-screen w-full bg-stone-950 flex flex-col font-sans text-stone-100 relative overflow-hidden">
+    <div className="h-screen max-h-screen w-full bg-black flex flex-col font-sans text-white relative overflow-hidden">
       <AmbientBackground />
       {/* Top Navigation */}
       <Navbar
@@ -548,8 +620,11 @@ export default function App() {
         onSignOut={handleSignOut}
         onNewEntry={handleNewEntry}
         onOpenSecurity={() => setIsSecurityModalOpen(true)}
+        isAdmin={isAdmin}
+        onOpenAdmin={() => setIsAdminDashboardOpen(true)}
         onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
-        onToggleSidebar={() => setIsSidebarOpenMobile((prev) => !prev)}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         onOpenMapView={() => setIsMapViewOpen(true)}
         saveStatus={saveStatus}
       />
@@ -560,17 +635,18 @@ export default function App() {
         <HistorySidebar
           entries={entries}
           selectedEntryId={activeEntry.id}
-          onSelectEntry={(entry) => setSelectedEntryId(entry.id)}
+          onSelectEntry={(entry) => { setSelectedEntryId(entry.id); setIsSidebarOpen(false); }}
           onNewEntry={handleNewEntry}
           onDeleteEntry={handleDeleteEntry}
           onToggleFavorite={handleToggleFavorite}
           onOpenMapView={() => setIsMapViewOpen(true)}
-          isOpen={isSidebarOpenMobile}
-          onCloseMobile={() => setIsSidebarOpenMobile(false)}
+          isOpen={isSidebarOpen}
+          onCloseMobile={() => setIsSidebarOpen(false)}
         />
 
         {/* Center Journal & Reflection Studio */}
         <JournalEditor
+          userName={user?.displayName?.split(' ')[0] || ''}
           entry={activeEntry}
           onUpdateEntry={handleUpdateEntry}
           onSendMessage={handleSendMessage}
@@ -587,6 +663,8 @@ export default function App() {
             }
           }}
           onOpenSummaryModal={() => setIsSummaryModalOpen(true)}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         />
       </div>
 
@@ -597,6 +675,11 @@ export default function App() {
       />
 
       {/* Firebase Configuration Modal */}
+      <AdminDashboardModal
+        isOpen={isAdminDashboardOpen}
+        onClose={() => setIsAdminDashboardOpen(false)}
+      />
+
       <FirebaseConfigModal
         isOpen={isFirebaseConfigModalOpen}
         onClose={() => setIsFirebaseConfigModalOpen(false)}

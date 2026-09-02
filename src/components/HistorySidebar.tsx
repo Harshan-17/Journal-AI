@@ -14,6 +14,7 @@ import {
   MapPin,
   Compass,
   Flame,
+  PanelLeftClose,
 } from 'lucide-react';
 import { JournalEntry, ReflectionMode } from '../types';
 import { formatRelativeDate, getDateGroup } from '../utils/sanitize';
@@ -109,8 +110,8 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
     switch (mode) {
       case 'brainstorm':
         return {
-          icon: <Lightbulb className="w-3.5 h-3.5 text-cyan-400" />,
-          bg: 'bg-cyan-950/60 border-cyan-500/30 text-cyan-300',
+          icon: <Lightbulb className="w-3.5 h-3.5 text-white" />,
+          bg: 'bg-white/10 border-white/30 text-white',
         };
       case 'actionable':
         return {
@@ -136,31 +137,33 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
       {isOpen && (
         <div
           onClick={onCloseMobile}
-          className="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-20 md:hidden animate-in fade-in"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-20 md:hidden animate-in fade-in"
         />
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-20 w-80 md:w-72 lg:w-80 h-full max-h-full min-h-0 bg-stone-950/90 backdrop-blur-xl border-r border-stone-800/80 flex flex-col transition-all duration-200 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        className={`fixed md:relative inset-y-0 left-0 z-20 h-full max-h-full min-h-0 bg-black/90 backdrop-blur-xl border-r border-neutral-800/80 flex flex-col transition-all duration-300 ease-in-out shrink-0 overflow-hidden ${
+          isOpen
+            ? 'w-80 md:w-72 lg:w-80 opacity-100 translate-x-0'
+            : '-translate-x-full md:translate-x-0 md:w-0 opacity-0 md:opacity-0 pointer-events-none border-r-0'
         } pt-16 md:pt-0`}
       >
         {/* Sidebar Header & New Entry Button */}
-        <div className="shrink-0 p-4 border-b border-stone-800/80 space-y-3">
+        <div className="shrink-0 p-4 border-b border-neutral-800/80 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-stone-300 flex items-center space-x-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center space-x-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-white" />
               <span>Reflections</span>
             </h2>
             <div className="flex items-center space-x-1.5">
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-900 border border-stone-800 text-stone-300">
-                {entries.length} {entries.length === 1 ? 'log' : 'logs'}
-              </span>
               <button
+                id="btn-sidebar-collapse"
                 onClick={onCloseMobile}
-                className="md:hidden p-1 text-stone-400 hover:text-stone-200 rounded-lg cursor-pointer"
+                className="p-1 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-lg transition-all active:scale-95 cursor-pointer"
+                title="Collapse sidebar [Ctrl+B]"
               >
-                <X className="w-4 h-4" />
+                <PanelLeftClose className="w-4 h-4 hidden md:block" />
+                <X className="w-4 h-4 md:hidden" />
               </button>
             </div>
           </div>
@@ -185,34 +188,36 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                   onOpenMapView();
                   onCloseMobile();
                 }}
-                className={`flex items-center space-x-1.5 py-2.5 px-3 bg-stone-900 hover:bg-stone-850 hover:${themeConfig.accentText} border border-stone-800 hover:${themeConfig.accentBorder} text-xs font-semibold rounded-xl transition-all active:scale-95 cursor-pointer`}
+                className={`flex items-center space-x-1.5 py-2.5 px-3 bg-neutral-900 hover:bg-neutral-850 hover:${themeConfig.accentText} border border-neutral-800 hover:${themeConfig.accentBorder} text-xs font-semibold rounded-xl transition-all active:scale-95 cursor-pointer`}
                 title="View places on interactive map"
               >
-                <Compass className="w-4 h-4 text-cyan-400" />
+                <Compass className="w-4 h-4 text-white" />
                 <span className="hidden sm:inline">Places</span>
               </button>
             )}
           </div>
 
-          {/* Search Input */}
+          {/* Search Bar */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-2.5 pointer-events-none" />
             <input
               id="input-search-history"
               type="text"
-              placeholder="Search thoughts, tags, places..."
+              placeholder="Search by title, tag, or content..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-stone-900/90 border border-stone-800/80 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-200 placeholder-stone-400 focus:outline-none focus:border-cyan-500/50 transition-colors"
+              className="w-full bg-neutral-900/90 border border-neutral-800/80 rounded-xl pl-9 pr-8 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-white/60 focus:ring-1 focus:ring-white/20 transition-all"
             />
-            {searchQuery && (
+            {searchQuery ? (
               <button
+                id="btn-clear-history-search"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-2 text-stone-400 hover:text-stone-200 cursor-pointer"
+                className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-200 cursor-pointer p-0.5 rounded transition-colors"
+                title="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
-            )}
+            ) : null}
           </div>
 
           {/* Filter Tabs */}
@@ -230,8 +235,8 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                 onClick={() => setFilterMode(tab.id)}
                 className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-all cursor-pointer ${
                   filterMode === tab.id
-                    ? `${themeConfig.accentBorder} ${themeConfig.accentText} bg-stone-900/90 shadow-xs border`
-                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                    ? `${themeConfig.accentBorder} ${themeConfig.accentText} bg-neutral-900/90 shadow-xs border`
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
                 }`}
               >
                 {tab.label}
@@ -241,24 +246,24 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         </div>
 
         {/* Chronologically Grouped Entries List */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4 overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3 space-y-4 overscroll-contain">
           {filteredEntries.length === 0 ? (
             <div className="text-center py-12 px-4 space-y-2">
-              <Calendar className="w-8 h-8 text-stone-500 mx-auto opacity-60" />
-              <p className="text-xs font-semibold text-stone-300">
+              <Calendar className="w-8 h-8 text-neutral-500 mx-auto opacity-60" />
+              <p className="text-xs font-semibold text-neutral-300">
                 {searchQuery ? 'No matching reflections.' : 'No entries yet.'}
               </p>
-              <p className="text-[11px] text-stone-400">
+              <p className="text-[11px] text-neutral-400">
                 {searchQuery ? 'Try another keyword or filter.' : 'Click "New Entry" to start reflecting.'}
               </p>
             </div>
           ) : (
             Object.entries(groupedEntries).map(([groupTitle, groupItems]) => (
-              <div key={groupTitle} className="space-y-1.5">
-                <div className="px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-stone-400">
+              <div key={groupTitle} className="space-y-1">
+                <div className="px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase text-neutral-400">
                   {groupTitle}
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-0.5">
                   {groupItems.map((entry) => {
                     const isSelected = entry.id === selectedEntryId;
                     const isConfirmingDelete = entryToDelete === entry.id;
@@ -272,119 +277,91 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
                           onSelectEntry(entry);
                           onCloseMobile();
                         }}
-                        className={`group relative p-3 rounded-2xl border text-left cursor-pointer transition-all ${
+                        className={`group relative px-3 py-2.5 rounded-xl text-left cursor-pointer transition-all flex items-center justify-between gap-2 ${
                           isSelected
-                            ? `${themeConfig.sidebarActive} ring-1 ring-white/10 shadow-md backdrop-blur-md`
-                            : 'bg-stone-900/40 border-stone-800/80 hover:bg-stone-900/80 hover:border-stone-700'
+                            ? `${themeConfig.sidebarActive} ring-1 ring-white/10 shadow-xs backdrop-blur-md`
+                            : 'hover:bg-neutral-900/80 text-neutral-300 hover:text-neutral-100 border border-transparent hover:border-neutral-800/80'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center space-x-2 min-w-0">
-                            <span className={`p-1 rounded-lg border ${badge.bg}`}>
-                              {badge.icon}
-                            </span>
-                            <h4
-                              className={`text-xs font-semibold truncate ${
-                                isSelected ? themeConfig.accentText : 'text-stone-100 group-hover:text-white'
-                              }`}
-                            >
-                              {entry.title || 'Untitled Reflection'}
-                            </h4>
-                          </div>
+                        {/* Left Topic Section with Mode Icon */}
+                        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                          <span className="shrink-0 text-neutral-400 group-hover:text-neutral-300">
+                            {badge.icon}
+                          </span>
+                          <span
+                            className={`text-xs font-medium truncate ${
+                              isSelected ? `${themeConfig.accentText} font-semibold` : 'text-neutral-200 group-hover:text-white'
+                            }`}
+                            title={entry.title || 'Untitled Reflection'}
+                          >
+                            {entry.title || 'Untitled Reflection'}
+                          </span>
+                        </div>
 
-                          {/* Star favorite with interactive confetti */}
+                        {/* Right Quick Action / Indicators */}
+                        <div className="flex items-center space-x-1 shrink-0">
+                          {entry.location && (
+                            <span
+                              className="text-white/80 hover:text-white"
+                              title={entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
+                            >
+                              <MapPin className="w-3 h-3 shrink-0" />
+                            </span>
+                          )}
+
+                          {/* Star favorite */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!entry.isFavorite) celebrate(30);
                               onToggleFavorite(entry);
                             }}
-                            className={`p-1 rounded-lg hover:bg-stone-800 transition-all active:scale-90 cursor-pointer ${
-                              entry.isFavorite ? 'text-amber-400' : 'text-stone-400 hover:text-amber-300'
+                            className={`p-1 rounded-md transition-all active:scale-90 cursor-pointer ${
+                              entry.isFavorite
+                                ? 'text-amber-400'
+                                : 'opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-amber-300 hover:bg-neutral-800'
                             }`}
                             title={entry.isFavorite ? 'Remove from favorites' : 'Mark as favorite'}
                           >
                             <Star className={`w-3.5 h-3.5 ${entry.isFavorite ? 'fill-amber-400' : ''}`} />
                           </button>
-                        </div>
 
-                        {/* Message preview snippet */}
-                        <p className="text-[11px] text-stone-400 line-clamp-2 mt-1.5 leading-relaxed">
-                          {entry.messages.length > 0
-                            ? entry.messages[entry.messages.length - 1].content.replace(/[#*`]/g, '')
-                            : 'Empty session'}
-                        </p>
-
-                        {/* Tags preview */}
-                        {entry.tags && entry.tags.length > 0 && (
-                          <div className="flex items-center gap-1 mt-2 flex-wrap">
-                            {entry.tags.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag}
-                                className="px-2 py-0.5 rounded-md bg-stone-900 border border-stone-800/80 text-stone-300 text-[10px] font-mono"
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Metadata footer */}
-                        <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-stone-800/60 text-[10px] text-stone-400">
-                          <span className="truncate">{formatRelativeDate(entry.updatedAt || entry.createdAt)}</span>
-
-                          <div className="flex items-center space-x-1.5 shrink-0">
-                            {entry.location && (
-                              <span
-                                className="px-1.5 py-0.5 rounded-md bg-cyan-950/50 border border-cyan-800/40 text-cyan-300 flex items-center space-x-1 max-w-[85px]"
-                                title={entry.location.name || entry.location.formattedAddress || 'Pinned Location'}
-                              >
-                                <MapPin className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
-                                <span className="truncate text-[9px]">{entry.location.name || 'Pin'}</span>
-                              </span>
-                            )}
-
-                            <span className="px-1.5 py-0.5 rounded-md bg-stone-900 border border-stone-800 text-stone-300">
-                              {entry.messages.length} msg{entry.messages.length === 1 ? '' : 's'}
-                            </span>
-
-                            {/* Delete button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEntryToDelete(entry.id);
-                              }}
-                              className="opacity-0 group-hover:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity cursor-pointer"
-                              title="Delete reflection"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {/* Delete button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEntryToDelete(entry.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-400 p-1 rounded-md hover:bg-neutral-800 transition-all cursor-pointer"
+                            title="Delete reflection"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
 
                         {/* Inline Delete Confirmation */}
                         {isConfirmingDelete && (
                           <div
                             onClick={(e) => e.stopPropagation()}
-                            className="absolute inset-0 bg-stone-950/95 border border-rose-800/80 rounded-2xl p-3 flex flex-col justify-between z-10 animate-in fade-in duration-150 backdrop-blur-md"
+                            className="absolute inset-0 bg-black/98 border border-rose-800/90 rounded-xl px-3 py-1.5 flex items-center justify-between z-10 animate-in fade-in duration-150 backdrop-blur-md"
                           >
-                            <p className="text-xs text-rose-200 font-semibold">Delete this reflection?</p>
-                            <div className="flex items-center justify-end space-x-2">
+                            <span className="text-xs text-rose-200 font-semibold truncate mr-2">Delete chat?</span>
+                            <div className="flex items-center space-x-1.5 shrink-0">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setEntryToDelete(null);
                                 }}
-                                className="px-2.5 py-1 text-[11px] text-stone-300 hover:bg-stone-800 rounded-lg cursor-pointer"
+                                className="px-2 py-0.5 text-[11px] text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-md cursor-pointer"
                               >
                                 Cancel
                               </button>
                               <button
                                 disabled={isDeleting}
                                 onClick={(e) => handleDeleteConfirm(entry.id, e)}
-                                className="px-2.5 py-1 text-[11px] bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg disabled:opacity-50 cursor-pointer"
+                                className="px-2 py-0.5 text-[11px] bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-md disabled:opacity-50 cursor-pointer"
                               >
-                                {isDeleting ? 'Deleting...' : 'Delete'}
+                                {isDeleting ? '...' : 'Delete'}
                               </button>
                             </div>
                           </div>
@@ -399,7 +376,7 @@ export const HistorySidebar: React.FC<HistorySidebarProps> = ({
         </div>
 
         {/* Sidebar Footer count */}
-        <div className="shrink-0 p-3 border-t border-stone-800/80 text-center text-[11px] text-stone-400 bg-stone-950/60">
+        <div className="shrink-0 p-3 border-t border-neutral-800/80 text-center text-[11px] text-neutral-400 bg-black/60">
           <span>{entries.length} reflection{entries.length === 1 ? '' : 's'} logged</span>
         </div>
       </aside>
