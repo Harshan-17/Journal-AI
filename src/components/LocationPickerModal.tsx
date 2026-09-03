@@ -122,7 +122,7 @@ const LocationPickerInner: React.FC<{
         { input: searchQuery.trim() },
         (results, status) => {
           if (
-            status === google.maps.places.PlacesServiceStatus.OK &&
+            status === 'OK' &&
             results &&
             results.length > 0
           ) {
@@ -261,7 +261,7 @@ const LocationPickerInner: React.FC<{
         try {
           const placesResult = await new Promise<google.maps.places.PlaceResult[] | null>((resolve) => {
             placesServiceRef.current?.textSearch({ query }, (results, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+              if (status === 'OK' && results && results.length > 0) {
                 resolve(results);
               } else {
                 resolve(null);

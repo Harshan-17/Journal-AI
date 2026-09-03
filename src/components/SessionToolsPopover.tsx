@@ -121,7 +121,7 @@ export const SessionToolsPopover: React.FC<SessionToolsPopoverProps> = ({
             <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
               Focus Angle
             </span>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-1">
               {modes.map((m) => {
                 const Icon = m.icon;
                 const isSelected = entry.mode === m.id;
@@ -132,13 +132,13 @@ export const SessionToolsPopover: React.FC<SessionToolsPopoverProps> = ({
                     onClick={() => {
                       onUpdateEntry({ mode: m.id });
                     }}
-                    className={`flex items-center space-x-2 p-2 rounded-xl text-xs font-medium text-left transition-all cursor-pointer ${
+                    className={`flex items-center space-x-1.5 p-1.5 rounded-lg text-[11px] font-medium text-left transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-neutral-800 text-neutral-100 border border-neutral-700 shadow-xs'
                         : 'bg-neutral-900/60 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 border border-transparent'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-neutral-500'}`} />
+                    <Icon className={`w-3 h-3 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-neutral-500'}`} />
                     <span className="truncate">{m.label}</span>
                   </button>
                 );

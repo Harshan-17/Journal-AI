@@ -9,7 +9,8 @@ import {
   Compass,
 } from 'lucide-react';
 import { useAppTheme } from '../context/ThemeContext';
-import HalftoneReveal from './HalftoneReveal';
+import AeroShards from './AeroShards';
+import { LiquidButton } from './ui/liquid-glass-button';
 
 interface LandingPageProps {
   onSignIn: () => Promise<void>;
@@ -64,46 +65,45 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div className="relative min-h-[calc(100vh-3.75rem)] flex flex-col justify-between text-neutral-100 overflow-hidden">
       {/* ========================================================================= */}
-      {/* 1. FULL-SCREEN INTERACTIVE HALFTONE REVEAL BACKGROUND */}
+      {/* 1. FULL-SCREEN INTERACTIVE AEROSHARDS BACKGROUND */}
       {/* ========================================================================= */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none transition-all duration-700">
-        <HalftoneReveal
-          key="landing-bg-alpine"
-          src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80"
-          inkColor="#081720"
-          paperColor="#e3f3fb"
-          mode="duotone"
-          shape="circle"
-          dotDensity={68}
-          revealRadius={0.38}
-          dotSize={0.92}
-          edge={0.76}
-          follow={0.24}
-          idleReveal={0.06}
-          trigger="hover"
-          globalMouse={true}
-          borderRadius="0px"
-          className="w-full h-full opacity-65 transition-opacity duration-500"
-        />
-
-        {/* Dynamic dark glass gradient vignette layer to guarantee pristine WCAG AA contrast */}
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-950/85 via-neutral-950/65 to-neutral-950/90 pointer-events-none" />
-        <div className="absolute inset-0 bg-radial-[circle_at_center,transparent_25%,rgba(12,10,9,0.75)_100%] pointer-events-none" />
-
-        {/* Ambient atmospheric color bloom */}
-        <div
-          className="absolute -top-32 -right-32 w-[45vw] h-[45vw] max-w-[550px] max-h-[550px] rounded-full blur-[130px] opacity-20 pointer-events-none animate-pulse"
-          style={{
-            background: `radial-gradient(circle, ${themeConfig.ambientColors[0]} 0%, ${themeConfig.ambientColors[1]} 50%, transparent 80%)`,
-            animationDuration: '10s',
-          }}
-        />
-        <div
-          className="absolute -bottom-32 -left-32 w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full blur-[140px] opacity-15 pointer-events-none"
-          style={{
-            background: `radial-gradient(circle, ${themeConfig.ambientColors[2]} 0%, transparent 75%)`,
-          }}
-        />
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none transition-all duration-700 bg-neutral-950">
+        <div className="w-full h-full opacity-100 transition-opacity duration-500">
+          <AeroShards
+            onError={() => {}}
+            backgroundColor="#120F17"
+            shardColor="#896ABD"
+            accentColor="#A855F7"
+            placement="full"
+            flow="stream"
+            material="pearl"
+            detail="balanced"
+            effect="none"
+            scale={1}
+            spread={1}
+            depth={1}
+            speed={1}
+            spin={1}
+            interaction="repel"
+            density={1.5}
+            shardSize={1.1}
+            stretch={1}
+            turbulence={1}
+            glow={1}
+            edgeSoftness={2}
+            bloom={0.5}
+            grain={0.05}
+            chromaticAberration={0.0075}
+            transitionDuration={1}
+            interactionRadius={1.5}
+            interactionStrength={0.5}
+            rippleIntensity={1}
+            holdToGather={true}
+          />
+        </div>
+        
+        {/* Subtle gradient to ensure text remains readable */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-neutral-950/80 pointer-events-none" />
       </div>
 
       {/* ========================================================================= */}
@@ -111,23 +111,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* ========================================================================= */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center max-w-xl mx-auto w-full px-4 sm:px-6 py-12 sm:py-16">
         <div className="w-full text-center space-y-8">
-          {/* Subtle Brand Badge */}
-          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-neutral-900/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold shadow-md backdrop-blur-md">
-            <Compass className="w-3.5 h-3.5 animate-pulse" />
-            <span>JournalGem • Mindful Journaling</span>
-          </div>
-
           {/* Heading & Subheading */}
-          <div className="space-y-3">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-normal tracking-tight leading-[1.15] text-neutral-100">
-              Unpack your thoughts. <br />
-              <span className={`bg-gradient-to-r ${themeConfig.textGradient} bg-clip-text text-transparent font-normal`}>
-                Gain instant clarity.
-              </span>
+          <div className="space-y-4">
+            <h1 className={`text-5xl sm:text-6xl lg:text-7xl font-['Playfair_Display'] font-medium tracking-tight leading-none bg-gradient-to-r ${themeConfig.textGradient} bg-clip-text text-transparent`}>
+              Journal <span className="italic">Gem</span>
             </h1>
 
-            <p className="text-sm sm:text-base text-neutral-300 max-w-md mx-auto leading-relaxed">
-              Write unhurried reflections, brainstorm through challenges, and organize your ideas with an intelligent conversational companion.
+            <p className="text-sm sm:text-base text-neutral-300 max-w-lg mx-auto leading-relaxed font-light">
+              A serene sanctuary where your scattered thoughts gently unfold into crystal clarity.
             </p>
           </div>
 
@@ -143,15 +134,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             )}
 
-            <button
+            <LiquidButton
               id="btn-google-signin"
               onClick={handleSignInClick}
               disabled={isLoading}
-              className="w-full inline-flex items-center justify-center space-x-3 px-6 py-4 bg-neutral-100 hover:bg-white text-neutral-950 font-bold text-sm sm:text-base rounded-2xl shadow-xl transition-all active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+              variant="default"
+              size="xxl"
+              className="w-[280px] sm:w-[320px] sm:text-base font-bold shadow-xl cursor-pointer text-white mx-auto"
             >
               {isLoading ? (
                 <div className="flex items-center space-x-2.5">
-                  <div className="w-4 h-4 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Connecting to Google...</span>
                 </div>
               ) : (
@@ -174,10 +167,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                     />
                   </svg>
-                  <span>Continue with Google</span>
+                  <span>Sign in with Google</span>
                 </>
               )}
-            </button>
+            </LiquidButton>
 
             <div className="pt-2 flex items-center justify-center space-x-2 text-xs text-neutral-400">
               <Lock className="w-3.5 h-3.5 text-neutral-400" />

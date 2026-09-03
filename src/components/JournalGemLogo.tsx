@@ -34,7 +34,7 @@ export const JournalGemIcon: React.FC<{
 
   return (
     <div
-      className={`relative flex items-center justify-center shrink-0 bg-gradient-to-tr ${themeConfig.primaryGradient} shadow-md transition-all duration-500 group overflow-hidden ${sizeClasses[size]} ${className}`}
+      className={`relative flex items-center justify-center shrink-0 bg-gradient-to-tr from-purple-900 via-indigo-950 to-black shadow-md transition-all duration-500 group overflow-hidden ${sizeClasses[size]} ${className}`}
     >
       {/* Gem Facet Glass Shimmer Overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-black/20 pointer-events-none" />

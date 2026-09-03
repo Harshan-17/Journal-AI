@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+.journal-text {
+  font-family: 'Cormorant Garamond', serif;
+}
+
 html,
 body,
 #root {

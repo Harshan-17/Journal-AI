@@ -64,6 +64,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
+          {isAdmin && onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              className="hidden sm:flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/20 rounded-lg transition-all active:scale-95 cursor-pointer"
+              title="Admin Dashboard"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Admin</span>
+            </button>
+          )}
+
           
 
           {user ? (

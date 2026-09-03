@@ -52,16 +52,22 @@ To store and access the `GEMINI_API_KEY` securely without hardcoding credentials
 # 1. Enable Secret Manager API
 gcloud services enable secretmanager.googleapis.com
 
-# 2. Create the GEMINI_API_KEY secret
+# 2. Create the GEMINI_API_KEY and DISCORD_WEBHOOK_URL secrets
 gcloud secrets create GEMINI_API_KEY --replication-policy="automatic"
+gcloud secrets create DISCORD_WEBHOOK_URL --replication-policy="automatic"
 
-# 3. Add your Gemini API key payload
+# 3. Add your secret payloads
 echo -n "YOUR_GEMINI_API_KEY" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
+echo -n "YOUR_DISCORD_WEBHOOK_URL" | gcloud secrets versions add DISCORD_WEBHOOK_URL --data-file=-
 
-# 4. Grant your Cloud Run compute service account access to read the secret
+# 4. Grant your Cloud Run compute service account access to read the secrets
 PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) --format="value(projectNumber)")
 
 gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding DISCORD_WEBHOOK_URL \
   --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor"
 ```
@@ -83,7 +89,7 @@ gcloud run deploy gemini-reflection-journal \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest \
+  --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest,DISCORD_WEBHOOK_URL=DISCORD_WEBHOOK_URL:latest \
   --port 3000
 ```
 
@@ -161,3 +167,15 @@ Every user interaction has a corresponding test specification below:
   - *Action*: Click the "Atlas" button in the history sidebar or location filter.
   - *Expected Result*: Opens `EntriesMapViewModal` displaying all pinned reflections globally on an interactive Google Map with custom markers and reflection preview cards.
 
+# Cloud Functions Deployment
+
+The `notifyOnJournalEntry` Cloud Function also requires access to the secrets. The `defineSecret` API automatically attempts to grant access to the default Compute Engine service account during deployment. However, if this fails due to permissions, you can manually bind the roles.
+
+Deploy the functions via:
+
+```bash
+cd functions
+firebase deploy --only functions
+```
+
+Ensure the deployment binds the Secret Manager access. If it fails, run the `gcloud secrets add-iam-policy-binding` commands listed above.

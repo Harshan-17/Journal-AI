@@ -12,6 +12,7 @@ import {
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   onSnapshot,
@@ -23,7 +24,8 @@ import { JournalEditor } from './components/JournalEditor';
 import { SecurityBadgeModal } from './components/SecurityBadgeModal';
 import { SummaryModal } from './components/SummaryModal';
 import { FirebaseConfigModal } from './components/FirebaseConfigModal';
-import { AdminDashboardModal } from './components/AdminDashboardModal';
+import { AdminDashboard } from './components/AdminDashboard';
+
 import { EntriesMapViewModal } from './components/EntriesMapViewModal';
 import { AmbientBackground } from './components/AmbientBackground';
 import { JournalEntry, JournalMessage, ReflectionMode, UserProfile } from './types';
@@ -32,7 +34,6 @@ import { sanitizePayload, formatTimestamp, isValidCoordinate } from './utils/san
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isEntriesLoading, setIsEntriesLoading] = useState(false);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -44,6 +45,7 @@ export default function App() {
 
   // Modals & UI States
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [isFirebaseConfigModalOpen, setIsFirebaseConfigModalOpen] = useState(false);
   const [isMapViewOpen, setIsMapViewOpen] = useState(false);
@@ -66,21 +68,38 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser({
+        const userProfile = {
           uid: currentUser.uid,
           email: currentUser.email || (currentUser.isAnonymous ? 'guest@isolated.session' : ''),
           displayName:
             currentUser.displayName ||
             (currentUser.isAnonymous ? 'Guest Explorer (Private)' : 'Authenticated User'),
           photoURL: currentUser.photoURL,
-        });
+          lastLogin: Date.now(),
+        };
+        setUser(userProfile);
 
+        // Save user profile to Firestore
         try {
-          const idTokenResult = await currentUser.getIdTokenResult(true);
-          setIsAdmin(!!idTokenResult.claims.admin || currentUser.email === 'harshan1339a@gmail.com');
+          await setDoc(doc(db, 'users', currentUser.uid), userProfile, { merge: true });
         } catch (err) {
-          setIsAdmin(currentUser.email === 'harshan1339a@gmail.com');
+          console.warn('Failed to save user profile', err);
         }
+
+        // Admin check fallback
+        let adminStatus = currentUser.email === 'harshan1339a@gmail.com';
+        try {
+          const rolesDoc = await getDoc(doc(db, 'roles', 'admins'));
+          if (rolesDoc.exists()) {
+            const emails = rolesDoc.data().emails || [];
+            if (emails.includes(currentUser.email)) {
+              adminStatus = true;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not read admin roles', e);
+        }
+        setIsAdmin(adminStatus);
       } else {
         setUser(null);
         setIsAdmin(false);
@@ -411,6 +430,16 @@ export default function App() {
         .catch(() => null);
     }
 
+    let enabledEvents: string[] = [];
+    try {
+      const settingsSnap = await getDoc(doc(db, 'settings', 'discord'));
+      if (settingsSnap.exists()) {
+        enabledEvents = settingsSnap.data().enabledEvents || [];
+      }
+    } catch (err) {
+      console.warn('Could not fetch discord settings:', err);
+    }
+
     // Call Backend Gemini Server Proxy (/api/gemini/chat)
     try {
       const response = await fetch('/api/gemini/chat', {
@@ -423,6 +452,7 @@ export default function App() {
           })),
           mode,
           entryTitle: entryWithUserMsg.title,
+          enabledEvents,
         }),
       });
 
@@ -431,15 +461,66 @@ export default function App() {
         throw new Error(errJson.error || `Gemini request failed with status ${response.status}`);
       }
 
-      const data = await response.json();
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Response stream not supported');
+
+      const decoder = new TextDecoder();
       const assistantNow = Date.now();
-      const assistantMessage: JournalMessage = {
+      let currentModelUsed = 'gemini-3.6-flash';
+      let assistantText = '';
+      
+      let assistantMessage: JournalMessage = {
         id: `msg_asst_${assistantNow}`,
         role: 'assistant',
-        content: data.reply || 'No response generated.',
+        content: '',
         timestamp: formatTimestamp(assistantNow),
-        modelUsed: data.modelUsed,
+        modelUsed: currentModelUsed,
       };
+      
+      // Optimistically add empty assistant message to UI
+      setEntries((prev) => prev.map((e) => {
+        if (e.id === entryWithUserMsg.id) {
+          return { ...e, messages: [...e.messages, assistantMessage] };
+        }
+        return e;
+      }));
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'start') {
+                currentModelUsed = data.modelUsed;
+                assistantMessage.modelUsed = currentModelUsed;
+              } else if (data.type === 'chunk') {
+                assistantText += data.text;
+                assistantMessage.content = assistantText;
+                setEntries((prev) => prev.map((e) => {
+                  if (e.id === entryWithUserMsg.id) {
+                    const msgs = [...e.messages];
+                    msgs[msgs.length - 1] = { ...assistantMessage };
+                    return { ...e, messages: msgs };
+                  }
+                  return e;
+                }));
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (err) {
+              // Ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
 
       const generatedTitle = await titlePromise;
       const finalEntry: JournalEntry = {
@@ -462,9 +543,9 @@ export default function App() {
           id: `interaction_${assistantNow}`,
           entryId: finalEntry.id,
           prompt: userText,
-          response: assistantMessage.content,
+          response: assistantText,
           mode,
-          modelUsed: data.modelUsed || 'gemini-3.6-flash',
+          modelUsed: currentModelUsed,
           timestamp: assistantNow,
         }),
         { merge: true }
@@ -553,8 +634,8 @@ export default function App() {
           onSignOut={handleSignOut}
           onNewEntry={() => {}}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
-        isAdmin={isAdmin}
-        onOpenAdmin={() => setIsAdminDashboardOpen(true)}
+          isAdmin={isAdmin}
+          onOpenAdmin={() => setIsAdminDashboardOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
           saveStatus="saved"
         />
@@ -572,10 +653,6 @@ export default function App() {
           isOpen={isSecurityModalOpen}
           onClose={() => setIsSecurityModalOpen(false)}
         />
-        <AdminDashboardModal
-        isOpen={isAdminDashboardOpen}
-        onClose={() => setIsAdminDashboardOpen(false)}
-      />
 
       <FirebaseConfigModal
           isOpen={isFirebaseConfigModalOpen}
@@ -595,8 +672,8 @@ export default function App() {
           onSignOut={handleSignOut}
           onNewEntry={() => {}}
           onOpenSecurity={() => setIsSecurityModalOpen(true)}
-        isAdmin={isAdmin}
-        onOpenAdmin={() => setIsAdminDashboardOpen(true)}
+          isAdmin={isAdmin}
+          onOpenAdmin={() => setIsAdminDashboardOpen(true)}
           onOpenFirebaseConfig={() => setIsFirebaseConfigModalOpen(true)}
           saveStatus="saving"
         />
@@ -610,6 +687,15 @@ export default function App() {
 
   // Active or Fallback empty entry for dashboard view
   const activeEntry: JournalEntry = currentEntry || createNewEmptyEntry(user.uid);
+
+  if (isAdminDashboardOpen && isAdmin) {
+    return (
+      <AdminDashboard 
+        onClose={() => setIsAdminDashboardOpen(false)} 
+        onSignOut={handleSignOut} 
+      />
+    );
+  }
 
   return (
     <div className="h-screen max-h-screen w-full bg-black flex flex-col font-sans text-white relative overflow-hidden">
@@ -672,12 +758,6 @@ export default function App() {
       <SecurityBadgeModal
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}
-      />
-
-      {/* Firebase Configuration Modal */}
-      <AdminDashboardModal
-        isOpen={isAdminDashboardOpen}
-        onClose={() => setIsAdminDashboardOpen(false)}
       />
 
       <FirebaseConfigModal

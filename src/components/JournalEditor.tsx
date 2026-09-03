@@ -81,9 +81,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       layoutId="composer-form"
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       onSubmit={handleSubmit} 
-      className="max-w-3xl mx-auto w-full space-y-3"
+      className="max-w-3xl mx-auto w-full space-y-2"
     >
-      <div className="relative flex items-end bg-black/40 border border-white/20 focus-within:border-white/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all p-3 backdrop-blur-2xl w-full rounded-xl shadow-[0_0_10px_rgba(255,255,255,0.05)]">
+      <div className="relative flex items-end bg-black/40 border border-white/20 focus-within:border-white/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all p-2.5 backdrop-blur-2xl w-full rounded-xl shadow-[0_0_10px_rgba(255,255,255,0.05)]">
         <textarea
           autoFocus
           id="input-journal-message"
@@ -98,14 +98,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           onKeyDown={handleKeyDown}
           placeholder="What are you contemplating right now?..."
           disabled={isGenerating}
-          className="flex-1 bg-transparent px-3 py-2 text-[15px] text-white placeholder-neutral-600 resize-none focus:outline-none max-h-40 min-h-[48px] leading-relaxed font-serif"
+          className="flex-1 bg-transparent px-2 py-1.5 text-[14px] sm:text-[15px] text-white placeholder-neutral-600 resize-none focus:outline-none max-h-40 min-h-[40px] leading-relaxed font-serif"
         />
 
         <button
           id="btn-send-message"
           type="submit"
           disabled={!inputText.trim() || isGenerating}
-          className={`p-3 ${themeConfig.accentBg} rounded-none shadow-xl disabled:opacity-20 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer active:scale-95 ml-2`}
+          className={`p-2.5 ${themeConfig.accentBg} rounded-none shadow-xl disabled:opacity-20 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer active:scale-95 ml-2`}
           title="Send message [Enter]"
         >
           <Send className="w-4 h-4" />
@@ -254,7 +254,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               type="text"
               value={entry.title}
               onChange={(e) => onUpdateEntry({ title: e.target.value })}
-              placeholder="Untitled Reflection..."
+              placeholder="Untitled Journal Gem..."
               className="bg-transparent font-serif text-base sm:text-lg text-white placeholder-neutral-600 focus:outline-none focus:text-white transition-colors truncate max-w-sm sm:max-w-md w-full"
             />
           </div>
@@ -369,7 +369,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
         ) : (
           /* Stream of Messages */
-          <div className="max-w-3xl mx-auto w-full space-y-12">
+          <div className="max-w-3xl mx-auto w-full space-y-8">
             {entry.messages.map((msg) => {
               const isUser = msg.role === 'user';
               const isCopied = copiedId === msg.id;
@@ -392,7 +392,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   {/* Message Body */}
                   {isUser ? (
                     /* User Message: Uses Dynamic Theme Config */
-                    <div className="relative max-w-[85%] px-5 py-4 bg-gray-900/60 backdrop-blur-md border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)] rounded-2xl rounded-tr-sm text-[14px] leading-relaxed">
+                    <div className="journal-text relative max-w-[85%] px-4 py-3 bg-gray-900/60 backdrop-blur-md border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)] rounded-2xl rounded-tr-sm text-[14px] sm:text-[15px] leading-relaxed">
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
 
                       <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -407,8 +407,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     </div>
                   ) : (
                     /* AI Message: Pure Editorial Typography */
-                    <div className="relative w-full px-6 py-5 bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-2xl text-[14px] sm:text-[15px] leading-loose shadow-sm">
-                      <div className="prose prose-invert prose-neutral max-w-none prose-p:my-4 prose-p:leading-loose prose-p:font-light prose-headings:my-4 prose-headings:text-white prose-headings:font-serif prose-headings:font-medium prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-li:my-1 prose-ul:my-4 prose-ol:my-4 prose-strong:text-white prose-strong:font-semibold prose-code:text-white prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:border prose-code:border-white/20 prose-code:font-mono prose-pre:my-4 prose-pre:p-4 prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/20 prose-pre:rounded-none">
+                    <div className="journal-text relative w-full px-5 py-4 bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-2xl text-[14px] sm:text-[15px] leading-loose shadow-sm">
+                      <div className="prose prose-invert prose-neutral max-w-none prose-p:my-4 prose-p:leading-loose prose-p:font-light prose-headings:my-3 prose-headings:text-white prose-headings:font-serif prose-headings:font-medium prose-h1:text-lg prose-h2:text-base prose-h3:text-[15px] prose-li:my-1 prose-ul:my-4 prose-ol:my-4 prose-strong:text-white prose-strong:font-semibold prose-code:text-white prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:border prose-code:border-white/20 prose-code:font-mono prose-pre:my-4 prose-pre:p-4 prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/20 prose-pre:rounded-none">
                         <Markdown>{msg.content}</Markdown>
                       </div>
 

@@ -1,4 +1,4 @@
-import confetti from 'canvas-confetti';
+
 import { AppTheme, MoodTag } from '../types';
 
 export interface ThemeConfig {
@@ -146,44 +146,6 @@ export const MOOD_TAGS: MoodTag[] = [
   { id: 'energized', emoji: '🚀', label: 'Energized', color: 'from-rose-500 to-fuchsia-500' },
 ];
 
-export function triggerThemeConfetti(themeId: AppTheme = 'aurora', customCount = 50) {
-  const currentTheme = THEMES[themeId] || THEMES.aurora;
-  try {
-    confetti({
-      particleCount: customCount,
-      spread: 70,
-      origin: { y: 0.8 },
-      colors: currentTheme.confettiColors,
-      ticks: 200,
-      gravity: 1.1,
-      scalar: 1.1,
-      shapes: ['circle', 'square'],
-      disableForReducedMotion: true,
-    });
-  } catch (e) {
-    console.warn('Confetti effect bypassed:', e);
-  }
-}
+export function triggerThemeConfetti(themeId: AppTheme = "aurora", customCount = 50) { }
 
-export function triggerBurstConfetti(themeId: AppTheme = 'aurora') {
-  const currentTheme = THEMES[themeId] || THEMES.aurora;
-  try {
-    const end = Date.now() + 800;
-    const interval: any = setInterval(() => {
-      if (Date.now() > end) {
-        return clearInterval(interval);
-      }
-      confetti({
-        startVelocity: 30,
-        spread: 360,
-        ticks: 60,
-        origin: { x: Math.random(), y: Math.random() - 0.2 },
-        colors: currentTheme.confettiColors,
-        shapes: ['circle'],
-        scalar: 0.9,
-      });
-    }, 150);
-  } catch (e) {
-    console.warn('Burst confetti bypassed:', e);
-  }
-}
+export function triggerBurstConfetti(themeId: AppTheme = "aurora") { }

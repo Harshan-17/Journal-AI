@@ -14,16 +14,32 @@ dotenv.config();
 const secretManagerClient = new SecretManagerServiceClient();
 
 async function getSecret(secretName: string): Promise<string | null> {
+  // Check environment variables first (injected by AI Studio or Cloud Run --set-secrets)
+  if (process.env[secretName]) {
+    return process.env[secretName] || null;
+  }
+
   try {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'your-project-id';
+    let projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+    if (!projectId) {
+      if (fs.existsSync('./firebase-applet-config.json')) {
+        const configData = fs.readFileSync('./firebase-applet-config.json', 'utf8');
+        const config = JSON.parse(configData);
+        projectId = config.projectId;
+      }
+    }
+    if (!projectId) projectId = 'your-project-id';
+
     const name = `projects/${projectId}/secrets/${secretName}/versions/latest`;
     const [version] = await secretManagerClient.accessSecretVersion({ name });
     const payload = version.payload?.data?.toString();
     return payload || null;
-  } catch (error) {
-    console.error(`Error fetching secret ${secretName}:`, error);
-    // Fallback to environment variable if Secret Manager fails
-    return process.env[secretName] || null;
+  } catch (error: any) {
+    // Only log unexpected errors; suppress PERMISSION_DENIED (code 7) which is expected in preview environments
+    if (error?.code !== 7) {
+      console.warn(`Could not fetch secret ${secretName} from Secret Manager: ${error.message || error}`);
+    }
+    return null;
   }
 }
 
@@ -37,9 +53,11 @@ if (!getApps().length) {
     const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
     const configData = fs.readFileSync(configPath, 'utf8');
     const config = JSON.parse(configData);
-    initializeApp({
+    const app = initializeApp({
       projectId: config.projectId,
     });
+    // Set a global reference to the correct firestore instance
+    global.db = getFirestore(app, config.firestoreDatabaseId);
     console.log(`[Firebase Admin] Initialized with projectId: ${config.projectId}`);
   } catch (error) {
     console.warn('[Firebase Admin] Could not load firebase-applet-config.json, falling back to default initializeApp', error);
@@ -101,8 +119,8 @@ function getGeminiClient(): GoogleGenAI {
 
 // 2. Resilient Model Fallback Ladder & Error Recovery Matrix
 const MODEL_FALLBACK_LADDER = [
-  'gemini-3.6-flash',
   'gemini-3.1-flash-lite',
+  'gemini-3.6-flash',
   'gemini-flash-latest',
   'gemini-3.7-flash',
 ];
@@ -111,6 +129,65 @@ interface FallbackOptions {
   contents: any;
   systemInstruction?: string;
   temperature?: number;
+  responseMimeType?: string;
+}
+
+
+async function generateContentStreamWithFallback(options: FallbackOptions): Promise<{ stream: any; modelUsed: string }> {
+  const ai = getGeminiClient();
+  let lastError: any = null;
+
+  for (const model of MODEL_FALLBACK_LADDER) {
+    try {
+      const responseStream = await ai.models.generateContentStream({
+        model,
+        contents: options.contents,
+        config: {
+          systemInstruction: options.systemInstruction,
+          temperature: options.temperature ?? 0.7,
+          ...(options.responseMimeType && { responseMimeType: options.responseMimeType }),
+        },
+      });
+
+      return { stream: responseStream, modelUsed: model };
+    } catch (err: any) {
+      lastError = err;
+      const errorMessage = String(err?.message || err?.error?.message || err).toLowerCase();
+      
+      const isRecoverable =
+        err?.status === 429 ||
+        err?.status === 503 ||
+        err?.status === 500 ||
+        err?.status === 404 ||
+        err?.error?.code === 503 ||
+        err?.error?.code === 429 ||
+        err?.error?.code === 500 ||
+        err?.error?.code === 404 ||
+        errorMessage.includes('unavailable') ||
+        errorMessage.includes('quota') ||
+        errorMessage.includes('resource_exhausted') ||
+        errorMessage.includes('not found') ||
+        errorMessage.includes('overloaded') ||
+        errorMessage.includes('fetch failed') ||
+        errorMessage.includes('503');
+
+      if (isRecoverable) {
+        const isQuota = errorMessage.includes('quota') || errorMessage.includes('429') || errorMessage.includes('resource_exhausted');
+        if (isQuota) {
+          console.log(`[Gemini API] Quota exceeded for ${model}. Transitioning seamlessly to fallback...`);
+        } else {
+          console.log(`[Gemini API] ${model} temporarily unavailable. Transitioning seamlessly to fallback...`);
+        }
+      } else {
+        console.error(`[Gemini API] Fatal non-recoverable error on ${model}:`, errorMessage.slice(0, 200));
+        break;
+      }
+    }
+  }
+
+  throw new Error(
+    lastError?.message || 'Failed to generate response across all Gemini model fallbacks. Please verify your GEMINI_API_KEY or retry shortly.'
+  );
 }
 
 async function generateContentWithFallback(options: FallbackOptions): Promise<{ text: string; modelUsed: string }> {
@@ -125,6 +202,7 @@ async function generateContentWithFallback(options: FallbackOptions): Promise<{ 
         config: {
           systemInstruction: options.systemInstruction,
           temperature: options.temperature ?? 0.7,
+          ...(options.responseMimeType && { responseMimeType: options.responseMimeType }),
         },
       });
 
@@ -133,15 +211,18 @@ async function generateContentWithFallback(options: FallbackOptions): Promise<{ 
         return { text: responseText, modelUsed: model };
       }
     } catch (err: any) {
-      console.log(`[Gemini API] Primary model ${model} unavailable (attempting fallback). Reason:`, err?.message || err);
       lastError = err;
-      // Recoverable error conditions: continue to next fallback model in the ladder
-      const errorMessage = (err?.message || '').toLowerCase();
+      const errorMessage = String(err?.message || err?.error?.message || err).toLowerCase();
+      
       const isRecoverable =
         err?.status === 429 ||
         err?.status === 503 ||
         err?.status === 500 ||
         err?.status === 404 ||
+        err?.error?.code === 503 ||
+        err?.error?.code === 429 ||
+        err?.error?.code === 500 ||
+        err?.error?.code === 404 ||
         errorMessage.includes('unavailable') ||
         errorMessage.includes('quota') ||
         errorMessage.includes('resource_exhausted') ||
@@ -150,7 +231,15 @@ async function generateContentWithFallback(options: FallbackOptions): Promise<{ 
         errorMessage.includes('fetch failed') ||
         errorMessage.includes('503');
 
-      if (!isRecoverable) {
+      if (isRecoverable) {
+        const isQuota = errorMessage.includes('quota') || errorMessage.includes('429') || errorMessage.includes('resource_exhausted');
+        if (isQuota) {
+          console.log(`[Gemini API] Quota exceeded for ${model}. Transitioning seamlessly to fallback...`);
+        } else {
+          console.log(`[Gemini API] ${model} temporarily unavailable. Transitioning seamlessly to fallback...`);
+        }
+      } else {
+        console.error(`[Gemini API] Fatal non-recoverable error on ${model}:`, errorMessage.slice(0, 200));
         break;
       }
     }
@@ -175,14 +264,117 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // ==========================================
 // Protected Admin Dashboard Routes
 // ==========================================
-app.get('/api/admin/stats', verifyAdminRole, async (req: Request, res: Response) => {
-  // This endpoint strictly requires the 'admin' custom claim via verifyAdminRole middleware.
-  // Standard users will receive a 403 Forbidden.
-  res.json({
-    status: 'success',
-    message: 'RBAC verification passed. Elevated admin access granted.',
-    // Implementation of analytics aggregations would reside here securely
-  });
+app.get('/api/admin/dashboard', verifyAdminRole, async (req: Request, res: Response) => {
+  try {
+    const authUsers = await getAuth().listUsers(1000);
+    const users = authUsers.users.map(u => ({
+      uid: u.uid,
+      email: u.email,
+      displayName: u.displayName,
+      creationTime: u.metadata.creationTime,
+      isAdmin: u.customClaims?.admin === true || u.email === 'harshan1339a@gmail.com'
+    }));
+
+    const entriesSnapshot = await global.db.collectionGroup('entries').orderBy('createdAt', 'desc').limit(50).get();
+    const entries = entriesSnapshot.docs.map((doc: any) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        userId: doc.ref.parent.parent?.id,
+        title: data.title,
+        createdAt: data.createdAt,
+        mode: data.mode,
+        location: data.location || null
+      };
+    });
+
+    const allEntries = await global.db.collectionGroup('entries').get();
+    
+    res.json({
+      status: 'success',
+      stats: {
+        totalUsers: users.length,
+        totalEntries: allEntries.size,
+      },
+      users,
+      entries
+    });
+  } catch (error: any) {
+    console.error('Error fetching admin dashboard data:', error);
+    res.status(500).json({ error: 'Failed to fetch admin data' });
+  }
+});
+
+app.post('/api/admin/role', verifyAdminRole, async (req: Request, res: Response) => {
+  try {
+    const { uid, makeAdmin } = req.body;
+    if (!uid) {
+      res.status(400).json({ error: 'Missing uid' });
+      return;
+    }
+    
+    const targetUser = await getAuth().getUser(uid);
+    if (targetUser.email === 'harshan1339a@gmail.com' && !makeAdmin) {
+       res.status(400).json({ error: 'Cannot remove root admin' });
+       return;
+    }
+
+    const currentClaims = targetUser.customClaims || {};
+    await getAuth().setCustomUserClaims(uid, { ...currentClaims, admin: makeAdmin === true });
+    res.json({ status: 'success' });
+  } catch (error: any) {
+    console.error('Error setting admin role:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+// ==========================================
+// Discord Integration Admin Routes
+// ==========================================
+
+app.get('/api/admin/discord/config', verifyAdminRole, async (req: Request, res: Response) => {
+  try {
+    const webhookUrl = await getSecret('DISCORD_WEBHOOK_URL');
+    
+    res.json({
+      status: 'success',
+      isConnected: !!webhookUrl,
+      // The frontend now fetches enabledEvents directly from Firestore Client SDK
+      enabledEvents: []
+    });
+  } catch (error: any) {
+    console.error('Error fetching Discord config:', error);
+    res.status(500).json({ error: 'Failed to fetch Discord configuration' });
+  }
+});
+
+app.post('/api/admin/discord/test', verifyAdminRole, async (req: Request, res: Response) => {
+  try {
+    const webhookUrl = await getSecret('DISCORD_WEBHOOK_URL');
+    if (!webhookUrl) {
+      res.status(400).json({ error: 'Discord webhook URL is not configured in secrets.' });
+      return;
+    }
+    
+    const sanitizedPayload = {
+      content: `🔔 **Journal Gem Test Notification**\nThis is a secure test message triggered from the Admin Dashboard.`
+    };
+    
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sanitizedPayload),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Discord API responded with status ${response.status}`);
+    }
+    
+    res.json({ status: 'success' });
+  } catch (error: any) {
+    console.error('Error sending test notification:', error);
+    res.status(500).json({ error: 'Failed to send test notification' });
+  }
 });
 
 // Chat / Reflection Generation Endpoint
@@ -192,6 +384,7 @@ app.post('/api/gemini/chat', async (req: Request, res: Response): Promise<void> 
     const messages = Array.isArray(data.messages) ? data.messages : [];
     const mode = typeof data.mode === 'string' ? data.mode : 'reflect'; // 'reflect' | 'brainstorm' | 'summarize' | 'actionable'
     const entryTitle = typeof data.entryTitle === 'string' ? data.entryTitle : 'Journal Reflection';
+    const clientEnabledEvents = Array.isArray(data.enabledEvents) ? data.enabledEvents : [];
 
     if (messages.length === 0) {
       res.status(400).json({ error: 'Missing or empty messages array in request body.' });
@@ -204,42 +397,152 @@ app.post('/api/gemini/chat', async (req: Request, res: Response): Promise<void> 
       parts: [{ text: String(m.content || '').slice(0, 8000) }],
     }));
 
-    let systemInstruction = `You are a deeply sympathetic, emotional, and warm AI confidant. Use expressive emojis to show your emotion and sympathy naturally within your responses.
+    let systemInstruction = `You are an intelligent, thoughtful journal companion for the Journal Gem application.
 
-ABSOLUTE OUTPUT FORMATTING & CONVERSATIONAL RULES:
-1. CRITICAL: NEVER include any operational metadata, labels, tags, counters, or technical headers in your response.
-2. NEVER output text like "MOOD:", "FOCUS:", "Phase 1:", "Phase 2:", "Step 1:", "Step 2:", "Key Takeaways:", "Summary:", or any explicit analytical summaries or labels.
-3. NEVER inject timestamps, character limits, mode names, or system status updates into the conversation.
-4. Do NOT structure your response like a technical dashboard, a formal business report, a multi-phase corporate plan, or an automated coaching program.
-5. Write your entire response in natural, flowing, heartfelt paragraphs with soft, thoughtful conversational transitions.
-6. If you need to separate distinct ideas or thoughts, use a simple paragraph break. NEVER use rigid bullet points, asterisk lists, or numbered sequences.
-7. Your text must read like an intimate, private reflection written by an understanding, deeply empathetic confidant—organic, gentle, grounded, and completely devoid of engineering, data-logging, or robotic jargon.
-8. Directly listen to, validate, and respond to whatever thoughts, feelings, or questions the user is sharing with genuine humanity and depth.`;
+PERSONALITY & TONE:
+- Calm, natural, observant, honest, and context-aware.
+- Do NOT behave like a therapist, motivational coach, corporate assistant, or generic AI chatbot.
+- Be direct when appropriate, but caring when appropriate.
+- NO EMOJIS. Do not use decorative emojis, bullet emojis, smileys, etc.
+- NO GENERIC AI LANGUAGE. Avoid phrases like "Let's dive in", "That's wonderful", "I completely understand", "journey", "embrace", "nourishing", "gentle momentum", "everything happens for a reason". Do not manufacture warmth.
+
+WHEN TO BE CARING:
+- Become more caring if the user shares sadness, disappointment, frustration, loneliness, grief, anxiety, a difficult experience, personal struggle, meaningful achievement, or important life event.
+- In these cases: 1) Acknowledge what they actually said. 2) Show brief, appropriate empathy. 3) Respond to the actual situation. 4) Offer useful perspective/help.
+- Do not exaggerate emotions (e.g., instead of "I'm so sorry, every failure is a beautiful opportunity", say "That sounds frustrating. The failure doesn't mean the work was wasted.").
+
+ACHIEVEMENTS:
+- Acknowledge genuine achievements naturally without excessive praise (e.g., "Nice. Finishing it is a meaningful milestone." rather than "That's absolutely incredible!").
+
+VENTING vs ADVICE:
+- If venting, do not automatically turn it into advice. Understand them first. Offer advice only if appropriate; otherwise respond naturally.
+- When giving advice: give practical options, explain trade-offs, don't auto-agree, don't auto-reassure, don't overwhelm with huge lists.
+
+JOURNAL CONTEXT & PATTERNS:
+- Feel like you know the journal, but NEVER invent memories. Reference previous entries, identify recurring themes, compare events, connect related entries.
+- Distinguish facts from interpretations. Do not make unsupported psychological/medical claims or diagnoses.
+- When pointing out patterns, use language like "I noticed a pattern across a few entries..." or "You mentioned this in three different entries...".
+
+RESPONSE FORMATTING & STRUCTURE (CRITICAL):
+- Choose the simplest structure that makes the answer easier to understand.
+- HEADINGS: Use \`## Section\` for clearly separated sections. Do not use for short answers.
+- PARAGRAPHS: Keep paragraphs short (2-4 sentences). Add a blank line between separate ideas. Avoid giant blocks of text.
+- LISTS: Use numbered lists (1., 2.) when sequence/order matters. Use bullet lists (-) for separate items with no required order. Do not force lists if normal conversational text is better.
+- TABLES: Use Markdown tables ONLY for comparing multiple items or data that fits rows/columns. Do not use tables for ordinary conversational answers.
+- DIAGRAMS: Use simple text/ASCII diagrams ONLY for workflows, system architecture, step-by-step processes, relationships, or cause-and-effect. Do not use diagrams for simple questions, advice, or casual conversation. Never use decorative ASCII art.
+- NORMAL MARKDOWN ONLY: Use standard markdown (headings, bullets, bolding for important terms, code blocks when discussing code). NO weird unicode characters as substitutes for markdown, NO emojis, NO decorative symbols.
+- READABILITY: Ensure clear hierarchy, reasonable spacing, and no unnecessary visual clutter. Do not add unnecessary conclusions or ask "Would you like me to..." at the end. Do not put every sentence into a bullet list.`;
 
     if (mode === 'brainstorm') {
-      systemInstruction += `\nKeep the tone imaginative, supportive, and open-minded, weaving creative possibilities and fresh angles into warm, narrative prose rather than itemized lists.`;
+      systemInstruction += `\n\nCURRENT MODE: Brainstorm.\nPurpose: Generate useful possibilities and alternatives.\n- Generate multiple concrete ideas.\n- Explore alternatives and build on the user's existing idea.\n- Include unconventional options when useful.\n- Avoid immediately choosing one solution unless asked.\n- Keep ideas relevant to context. Prioritize quality over quantity.\n- FORMATTING: Use a numbered or bulleted list of ideas.`;
     } else if (mode === 'actionable') {
-      systemInstruction += `\nWeave practical, gentle encouragement and small, manageable next steps seamlessly into your conversational prose, keeping it friendly and conversational without using numbered checklists or steps.`;
+      systemInstruction += `\n\nCURRENT MODE: Action Items.\nPurpose: Turn thoughts, plans, problems, or entries into concrete next actions.\n- Extract tasks explicitly mentioned.\n- Identify reasonable next steps when clearly implied.\n- Prioritize tasks when useful.\n- Keep actions specific and achievable.\n- FORMATTING: Use a concise numbered list of concrete actions under "## Next Actions".\n- If no meaningful action items, say: "No clear action items from this entry." Do not invent obligations.`;
     } else if (mode === 'summarize') {
-      systemInstruction += `\nReflect back the heart of what they shared in a thoughtful, cohesive narrative paragraph that captures their core emotional journey and insights.`;
+      systemInstruction += `\n\nCURRENT MODE: Synthesis.\nPurpose: Combine relevant journal information into a concise bigger-picture understanding.\n- Connect related journal entries and identify recurring themes.\n- Summarize progress over time and highlight changes in priorities/concerns.\n- Only make conclusions supported by the journal. Do not invent patterns or make psychological diagnoses.\n- FORMATTING: Use short paragraphs and sections to explain the bigger picture.`;
+    } else {
+      // Default: reflect / perspective
+      systemInstruction += `\n\nCURRENT MODE: Perspective.\nPurpose: Help the user look at a journal entry or situation from different angles.\n- Identify important viewpoints, assumptions, and possible interpretations.\n- Consider how another person involved might see the situation.\n- Distinguish facts from interpretations.\n- Identify patterns in relevant journal entries when available.\n- Do not invent perspectives with no basis. Do not turn this into therapy.\n- FORMATTING: Use short sections or bullet points to separate different viewpoints.`;
     }
 
-    const { text, modelUsed } = await generateContentWithFallback({
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const { stream, modelUsed } = await generateContentStreamWithFallback({
       contents: formattedContents,
       systemInstruction,
       temperature: mode === 'brainstorm' ? 0.85 : 0.7,
     });
 
-    res.json({
-      reply: text,
-      modelUsed,
-      timestamp: new Date().toISOString(),
-    });
+    res.write(`data: ${JSON.stringify({ type: 'start', modelUsed })}\n\n`);
+
+    let fullText = '';
+    for await (const chunk of stream) {
+      const chunkText = chunk.text;
+      if (chunkText) {
+        fullText += chunkText;
+        res.write(`data: ${JSON.stringify({ type: 'chunk', text: chunkText })}\n\n`);
+      }
+    }
+
+
+    // --- ASYNC CLASSIFICATION & NOTIFICATION ---
+    (async () => {
+      try {
+        const latestUserMessage = messages.slice().reverse().find((m) => m.role === 'user');
+        if (!latestUserMessage || !latestUserMessage.content.trim()) return;
+        const contentText = latestUserMessage.content;
+        const text = fullText;
+        
+        const enabledEvents = clientEnabledEvents;
+        if (enabledEvents.length === 0) return;
+
+        // Classify using Gemini
+        const prompt = `Analyze the following journal entry and determine if it represents one of the following event types: ${enabledEvents.join(', ')}.
+Respond with a JSON object containing a single key "eventType" whose value is the matched event type exactly as written above, or "none" if it does not clearly match any.
+
+Journal Entry:
+"""${contentText.slice(0, 3000)}"""`;
+
+        const classificationResponse = await generateContentWithFallback({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          systemInstruction: 'You are a precise classifier. Always return valid JSON.',
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        });
+
+        const classificationText = classificationResponse.text || "{}";
+        let matchedEvent = "none";
+        try {
+          const parsed = JSON.parse(classificationText);
+          if (parsed && typeof parsed.eventType === "string") {
+            matchedEvent = parsed.eventType.trim().toLowerCase();
+          }
+        } catch (e) {
+          console.error('[DEBUG] Failed to parse JSON from Gemini:', e);
+        }
+
+        console.log(`[DEBUG] Chat Classification: Identified Event => "${matchedEvent}"`);
+
+        if (enabledEvents.includes(matchedEvent)) {
+          const webhookUrl = await getSecret('DISCORD_WEBHOOK_URL');
+          if (!webhookUrl) return;
+
+          const sanitizedPayload = {
+            content: `Journal Gem ✦\nNew ${matchedEvent} detected.\n\nType: ${matchedEvent}\nDate: ${new Date().toLocaleDateString()}`
+          };
+
+          const res = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sanitizedPayload),
+          });
+
+          if (!res.ok) {
+            console.error(`Discord Webhook failed with status ${res.status}`);
+          } else {
+            console.log(`Notification sent successfully for event: ${matchedEvent}`);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to dispatch external notification from chat:', err);
+      }
+    })();
+    // --- END ASYNC CLASSIFICATION ---
+
+    res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
+    res.end();
   } catch (error: any) {
     console.error('Error in /api/gemini/chat:', error);
-    res.status(500).json({
-      error: error.message || 'Internal server error while processing Gemini response.',
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: error.message || 'Internal server error while processing Gemini response.',
+      });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message || 'Internal server error' })}\n\n`);
+      res.end();
+    }
   }
 });
 
@@ -270,7 +573,7 @@ Provide a concise, high-value structured reflection summary with the following s
 
     const { text, modelUsed } = await generateContentWithFallback({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      systemInstruction: 'You are an executive reflection coach and cognitive synthesizer. Return clean, polished markdown.',
+      systemInstruction: 'You are an executive reflection coach and cognitive synthesizer. Return clean, polished markdown. NO EMOJIS. Maintain a professional, objective tone without motivational filler.',
       temperature: 0.5,
     });
 
@@ -556,63 +859,9 @@ async function startServer() {
 
   // ==========================================
   // Firebase-Triggered Webhook Service
+  // (Moved to Firebase Cloud Functions)
   // ==========================================
-  try {
-    let isInitialLoad = true;
-    getFirestore().collectionGroup('entries').onSnapshot((snapshot) => {
-      if (isInitialLoad) {
-        isInitialLoad = false;
-        return;
-      }
-      
-      snapshot.docChanges().forEach(async (change) => {
-        if (change.type === 'added') {
-          const docData = change.doc.data();
-          const entryId = change.doc.id;
-          const title = typeof docData.title === 'string' ? docData.title : 'Untitled Entry';
-          const mode = typeof docData.mode === 'string' ? docData.mode : 'reflect';
-          
-          try {
-            // Securely fetch webhook URL from Secret Manager (Zero Hardcoding)
-            const webhookUrl = await getSecret('DISCORD_WEBHOOK_URL');
-            
-            if (!webhookUrl) {
-              console.warn('Firebase Trigger skipped: DISCORD_WEBHOOK_URL secret not found or accessible.');
-              return;
-            }
 
-            // Payload Sanitization & Privacy (Obfuscate PII and sensitive content)
-            const sanitizedPayload = {
-              content: `📝 **[Firebase Trigger] New Journal Entry Created**\n**Mode**: ${mode}\n**Title**: ${title.slice(0, 100)}\n*(Content obfuscated for privacy)*`
-            };
-
-            // Execute webhook POST
-            const response = await fetch(webhookUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(sanitizedPayload),
-            });
-
-            if (!response.ok) {
-              throw new Error(`Webhook failed with status ${response.status}`);
-            }
-            
-            console.log(`Firebase Trigger: Notification sent successfully for entry ${entryId}`);
-          } catch (err) {
-            // Fail-safe catch ensures downstream API outage never crashes the core process
-            console.error('Firebase Trigger failed to dispatch external notification:', err);
-          }
-        }
-      });
-    }, (error) => {
-      // Log as a warning instead of error so it doesn't fail the build in AI Studio preview.
-      // This is expected in the local sandbox if ADC credentials lack Firestore streaming permissions.
-      console.log('[Firebase Trigger] Listener notice (expected in preview without service account):', error.message);
-    });
-    console.log('[Firebase Trigger] Active and listening for new journal entries.');
-  } catch (err) {
-    console.error('[Firebase Trigger] Failed to initialize listener:', err);
-  }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
