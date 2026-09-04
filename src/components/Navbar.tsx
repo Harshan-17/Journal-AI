@@ -36,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header
       className={`sticky top-0 z-30 text-neutral-100 transition-all duration-300 ${
         user
-          ? 'bg-black/80 backdrop-blur-xl border-b border-neutral-800/80'
+          ? 'bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800/80'
           : 'bg-transparent border-b border-transparent'
       }`}
     >

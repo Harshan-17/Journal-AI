@@ -409,32 +409,46 @@ export default function App() {
     setIsGenerating(true);
     setError(null);
 
-    try {
-      await persistEntry(entryWithUserMsg);
-    } catch (saveErr) {
+    persistEntry(entryWithUserMsg).catch((saveErr) => {
       console.warn('Initial turn save notice:', saveErr);
-    }
+    });
 
     // Start generating title concurrently if it needs an update
-    let titlePromise: Promise<string | null> = Promise.resolve(null);
     if (needsTitleUpdate) {
       // Send the entire conversation history to get a better topic
       const conversationContext = entryWithUserMsg.messages.map(m => m.role + ': ' + m.content).join('\n');
-      titlePromise = fetch('/api/gemini/title', {
+      fetch('/api/gemini/title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: conversationContext }),
       })
         .then((r) => r.json())
-        .then((d) => d.title || null)
+        .then((d) => {
+          if (d.title) {
+            let updatedE: JournalEntry | null = null;
+            setEntries((prev) => prev.map((e) => {
+              if (e.id === entryWithUserMsg.id) {
+                updatedE = { ...e, title: d.title, updatedAt: Date.now() };
+                return updatedE;
+              }
+              return e;
+            }));
+            if (updatedE) {
+              persistEntry(updatedE).catch(console.warn);
+            }
+          }
+        })
         .catch(() => null);
     }
 
     let enabledEvents: string[] = [];
     try {
-      const settingsSnap = await getDoc(doc(db, 'settings', 'discord'));
-      if (settingsSnap.exists()) {
-        enabledEvents = settingsSnap.data().enabledEvents || [];
+      const snap = await Promise.race([
+        getDoc(doc(db, 'settings', 'discord')),
+        new Promise((resolve) => setTimeout(() => resolve(null), 150))
+      ]);
+      if (snap && (snap as any).exists && (snap as any).exists()) {
+        enabledEvents = (snap as any).data().enabledEvents || [];
       }
     } catch (err) {
       console.warn('Could not fetch discord settings:', err);
@@ -522,18 +536,32 @@ export default function App() {
         }
       }
 
-      const generatedTitle = await titlePromise;
-      const finalEntry: JournalEntry = {
-        ...entryWithUserMsg,
-        title: generatedTitle || entryWithUserMsg.title,
-        messages: [...entryWithUserMsg.messages, assistantMessage],
-        updatedAt: assistantNow,
-      };
-
-      setEntries((prev) => prev.map((e) => (e.id === finalEntry.id ? finalEntry : e)));
+      let finalEntryToPersist: JournalEntry | null = null;
+      setEntries((prev) => prev.map((e) => {
+        if (e.id === entryWithUserMsg.id) {
+          const finalE = {
+            ...e,
+            messages: e.messages.map(m => m.id === assistantMessage.id ? assistantMessage : m),
+            updatedAt: assistantNow,
+          };
+          finalEntryToPersist = finalE;
+          return finalE;
+        }
+        return e;
+      }));
 
       // Guaranteed transaction persistence to /users/{userId}/entries/{entryId}
-      await persistEntry(finalEntry);
+      let loggedEntryId = entryWithUserMsg.id;
+      if (finalEntryToPersist) {
+        await persistEntry(finalEntryToPersist);
+      } else {
+        const finalEntry: JournalEntry = {
+          ...entryWithUserMsg,
+          messages: [...entryWithUserMsg.messages, assistantMessage],
+          updatedAt: assistantNow,
+        };
+        await persistEntry(finalEntry);
+      }
 
       // Log interaction record to /users/{userId}/interactions/{interactionId}
       const interactionDocRef = doc(db, 'users', user.uid, 'interactions', `interaction_${assistantNow}`);
@@ -541,7 +569,7 @@ export default function App() {
         interactionDocRef,
         sanitizePayload({
           id: `interaction_${assistantNow}`,
-          entryId: finalEntry.id,
+          entryId: loggedEntryId,
           prompt: userText,
           response: assistantText,
           mode,
@@ -617,7 +645,7 @@ export default function App() {
   // Loading spinner during initial Firebase Auth state verification
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center space-y-4 text-white">
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center space-y-4 text-white">
         <div className="w-10 h-10 border-3 border-white border-t-transparent rounded-full animate-spin" />
         <p className="text-sm font-medium text-neutral-400">Verifying secure Firebase session...</p>
       </div>
@@ -627,7 +655,7 @@ export default function App() {
   // Unauthenticated Landing Page
   if (!user) {
     return (
-      <div className="min-h-screen bg-black flex flex-col font-sans relative overflow-hidden">
+      <div className="min-h-screen bg-neutral-950 flex flex-col font-sans relative overflow-hidden">
         <AmbientBackground />
         <Navbar
           user={null}
@@ -665,7 +693,7 @@ export default function App() {
   // Loading indicator while initial user entries are fetching from Cloud Firestore
   if (isEntriesLoading && entries.length === 0) {
     return (
-      <div className="min-h-screen bg-black flex flex-col font-sans text-white relative overflow-hidden">
+      <div className="min-h-screen bg-neutral-950 flex flex-col font-sans text-white relative overflow-hidden">
         <AmbientBackground />
         <Navbar
           user={user}
@@ -698,7 +726,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen max-h-screen w-full bg-black flex flex-col font-sans text-white relative overflow-hidden">
+    <div className="h-screen max-h-screen w-full bg-neutral-950 flex flex-col font-sans text-white relative overflow-hidden">
       <AmbientBackground />
       {/* Top Navigation */}
       <Navbar

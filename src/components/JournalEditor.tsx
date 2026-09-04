@@ -81,9 +81,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       layoutId="composer-form"
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       onSubmit={handleSubmit} 
-      className="max-w-3xl mx-auto w-full space-y-2"
+      className="max-w-[800px] mx-auto w-full space-y-2"
     >
-      <div className="relative flex items-end bg-black/40 border border-white/20 focus-within:border-white/50 focus-within:shadow-[0_0_20px_rgba(255,255,255,0.15)] transition-all p-2.5 backdrop-blur-2xl w-full rounded-xl shadow-[0_0_10px_rgba(255,255,255,0.05)]">
+      <div className="relative flex items-end bg-neutral-900 border border-neutral-800 focus-within:border-neutral-600 transition-all p-2 w-full rounded-[14px] shadow-sm">
         <textarea
           autoFocus
           id="input-journal-message"
@@ -98,14 +98,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           onKeyDown={handleKeyDown}
           placeholder="What are you contemplating right now?..."
           disabled={isGenerating}
-          className="flex-1 bg-transparent px-2 py-1.5 text-[14px] sm:text-[15px] text-white placeholder-neutral-600 resize-none focus:outline-none max-h-40 min-h-[40px] leading-relaxed font-serif"
+          className="flex-1 bg-transparent px-3 py-1.5 text-[14px] sm:text-[15px] font-sans text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none max-h-40 min-h-[40px] leading-relaxed custom-scrollbar"
         />
 
         <button
           id="btn-send-message"
           type="submit"
           disabled={!inputText.trim() || isGenerating}
-          className={`p-2.5 ${themeConfig.accentBg} rounded-none shadow-xl disabled:opacity-20 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer active:scale-95 ml-2`}
+          className={`p-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded-xl shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer ml-2`}
           title="Send message [Enter]"
         >
           <Send className="w-4 h-4" />
@@ -223,9 +223,9 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 w-full bg-black backdrop-blur-md text-white overflow-hidden relative z-10">
+    <div className="flex-1 flex flex-col h-full min-h-0 w-full bg-neutral-950 text-neutral-200 overflow-hidden relative z-10 font-sans">
       {/* Streamlined Minimalist Header Bar */}
-      <div className="shrink-0 px-4 sm:px-8 py-3.5 border-b border-white/10 bg-black/80 backdrop-blur-xl flex items-center justify-between gap-4 relative z-40">
+      <div className="shrink-0 px-4 sm:px-8 py-3 border-b border-neutral-800/60 bg-neutral-950/90 backdrop-blur-md flex items-center justify-between gap-4 relative z-40">
         {/* Left: Sidebar Toggle & Clean Inline Title */}
         <div className="flex-1 min-w-0 flex items-center space-x-3">
           {onToggleSidebar && (
@@ -255,7 +255,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               value={entry.title}
               onChange={(e) => onUpdateEntry({ title: e.target.value })}
               placeholder="Untitled Journal Gem..."
-              className="bg-transparent font-serif text-base sm:text-lg text-white placeholder-neutral-600 focus:outline-none focus:text-white transition-colors truncate max-w-sm sm:max-w-md w-full"
+              className="bg-transparent font-sans text-[15px] sm:text-base text-neutral-200 font-medium placeholder-neutral-600 focus:outline-none focus:text-white transition-colors truncate max-w-sm sm:max-w-md w-full"
             />
           </div>
         </div>
@@ -369,7 +369,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
         ) : (
           /* Stream of Messages */
-          <div className="max-w-3xl mx-auto w-full space-y-8">
+          <div className="max-w-[800px] mx-auto w-full space-y-8">
             {entry.messages.map((msg) => {
               const isUser = msg.role === 'user';
               const isCopied = copiedId === msg.id;
@@ -381,18 +381,18 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                   className={`flex flex-col w-full group ${isUser ? "items-end" : "items-start"}`}
                 >
                   {/* Sender & Timestamp */}
-                  <div className={`flex items-center space-x-1.5 text-[10px] text-neutral-500 mb-2 px-1 uppercase tracking-widest font-mono ${isUser ? "flex-row-reverse space-x-reverse" : ""}`}>
-                    <span className="font-bold text-neutral-400">
-                      {isUser ? 'You' : 'Reflect AI'}
+                  <div className={`flex items-center space-x-2 text-[11px] mb-1.5 px-1 ${isUser ? "flex-row-reverse space-x-reverse" : ""}`}>
+                    <span className="font-medium tracking-wide text-neutral-400 uppercase">
+                      {isUser ? 'You' : 'REFLECT AI'}
                     </span>
-                    <span className="opacity-50">•</span>
-                    <span className="bg-white/10 text-white px-2 py-0.5 rounded-md font-bold tracking-wider shadow-[0_0_8px_rgba(255,255,255,0.1)]">{msg.timestamp}</span>
+                    <span className="text-neutral-700">•</span>
+                    <span className="text-neutral-500 tracking-wide uppercase">{msg.timestamp}</span>
                   </div>
 
                   {/* Message Body */}
                   {isUser ? (
                     /* User Message: Uses Dynamic Theme Config */
-                    <div className="journal-text relative max-w-[85%] px-4 py-3 bg-gray-900/60 backdrop-blur-md border border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.15)] rounded-2xl rounded-tr-sm text-[14px] sm:text-[15px] leading-relaxed">
+                    <div className="relative max-w-[75%] px-4 py-3 bg-neutral-800 border border-neutral-700/50 rounded-[14px] rounded-tr-[4px] text-[14px] sm:text-[15px] font-sans text-neutral-100 leading-relaxed shadow-sm">
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
 
                       <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -407,8 +407,8 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
                     </div>
                   ) : (
                     /* AI Message: Pure Editorial Typography */
-                    <div className="journal-text relative w-full px-5 py-4 bg-gray-900/60 backdrop-blur-md border border-white/10 rounded-2xl text-[14px] sm:text-[15px] leading-loose shadow-sm">
-                      <div className="prose prose-invert prose-neutral max-w-none prose-p:my-4 prose-p:leading-loose prose-p:font-light prose-headings:my-3 prose-headings:text-white prose-headings:font-serif prose-headings:font-medium prose-h1:text-lg prose-h2:text-base prose-h3:text-[15px] prose-li:my-1 prose-ul:my-4 prose-ol:my-4 prose-strong:text-white prose-strong:font-semibold prose-code:text-white prose-code:bg-white/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:border prose-code:border-white/20 prose-code:font-mono prose-pre:my-4 prose-pre:p-4 prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/20 prose-pre:rounded-none">
+                    <div className="relative w-full px-5 py-4 bg-transparent sm:bg-neutral-900/40 sm:border border-neutral-800/50 rounded-2xl text-[15px] sm:text-[16px] leading-[1.65] shadow-sm font-sans text-neutral-200">
+                      <div className="prose prose-invert prose-neutral max-w-none font-sans prose-p:my-3 prose-p:leading-[1.7] prose-p:font-normal prose-headings:my-4 prose-headings:text-neutral-100 prose-headings:font-sans prose-headings:font-semibold prose-h1:text-[22px] prose-h2:text-[18px] prose-h3:text-[16px] prose-li:my-1 prose-ul:my-3 prose-ol:my-3 prose-strong:text-white prose-strong:font-semibold prose-code:text-neutral-200 prose-code:bg-neutral-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:border prose-code:border-neutral-700 prose-code:rounded-md prose-code:font-mono prose-pre:my-4 prose-pre:p-4 prose-pre:bg-neutral-900 prose-pre:border prose-pre:border-neutral-800 prose-pre:rounded-xl prose-table:w-full prose-table:my-4 prose-th:text-left prose-th:p-2 prose-th:border-b prose-th:border-neutral-700 prose-td:p-2 prose-td:border-b prose-td:border-neutral-800/50 prose-blockquote:border-l-2 prose-blockquote:border-neutral-700 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-neutral-400">
                         <Markdown>{msg.content}</Markdown>
                       </div>
 
